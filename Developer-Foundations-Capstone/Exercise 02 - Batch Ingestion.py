@@ -146,6 +146,7 @@ fixed_width_column_defs = {
   "product_sold_price": (390, 20)
 }
 
+
 # COMMAND ----------
 
 # MAGIC %md ### Implement Exercise #2.A
@@ -156,6 +157,37 @@ fixed_width_column_defs = {
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+first_set_2017_df = (spark
+           .read
+           .text(batch_2017_path)
+          )
+
+table_first_set_2017_f = (first_set_2017_df
+                            .withColumn("submitted_at", regexp_replace(substring(col("value"),1,15)," ",""))
+                            .withColumn("order_id", regexp_replace(substring(col("value"),16,40)," ",""))
+                            .withColumn("customer_id", regexp_replace(substring(col("value"),56,40)," ",""))
+                            .withColumn("sales_rep_id", regexp_replace(substring(col("value"),96,40)," ",""))
+                            .withColumn("sales_rep_ssn", regexp_replace(substring(col("value"),136,15)," ",""))
+                            .withColumn("sales_rep_first_name", regexp_replace(substring(col("value"),151, 15)," ",""))
+                            .withColumn("sales_rep_last_name", regexp_replace(substring(col("value"),166, 15)," ",""))
+                            .withColumn("sales_rep_address", regexp_replace(substring(col("value"),181, 40)," ",""))
+                            .withColumn("sales_rep_city", regexp_replace(substring(col("value"),221, 20)," ",""))
+                            .withColumn("sales_rep_state", regexp_replace(substring(col("value"),241, 2)," ",""))
+                            .withColumn("sales_rep_zip", regexp_replace(substring(col("value"),243, 5)," ",""))
+                            .withColumn("shipping_address_attention", regexp_replace(substring(col("value"),248, 30)," ",""))
+                            .withColumn("shipping_address_address", regexp_replace(substring(col("value"),278, 40)," ",""))
+                            .withColumn("shipping_address_city", regexp_replace(substring(col("value"),318, 20)," ",""))
+                            .withColumn("shipping_address_state", regexp_replace(substring(col("value"),338, 2)," ",""))
+                            .withColumn("shipping_address_zip", regexp_replace(substring(col("value"),340, 5)," ",""))
+                            .withColumn("product_id", regexp_replace(substring(col("value"),345, 40)," ",""))
+                            .withColumn("product_quantity", regexp_replace(substring(col("value"),385, 5)," ",""))
+                            .withColumn("product_sold_price", regexp_replace(substring(col("value"),390, 20)," ",""))
+                            .drop(col("value"))
+)
+display(table_first_set_2017_f)
+
 
 # COMMAND ----------
 
