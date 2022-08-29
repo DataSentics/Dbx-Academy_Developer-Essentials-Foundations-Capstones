@@ -148,6 +148,15 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
+df = spark.read.format("text").option("header", True).load(batch_2017_path)
+
+
+for k in fixed_width_column_defs.keys():
+    df = (df.withColumn(k,df["value"].substr(fixed_width_column_defs[k][0],fixed_width_column_defs[k][1])))
+display(df.drop("value"))
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #2.A
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
