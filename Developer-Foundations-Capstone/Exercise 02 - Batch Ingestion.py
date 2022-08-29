@@ -154,8 +154,26 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+batch_2017_path = "dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2017.txt"
+
+batch_2017 = (spark
+              .read
+              .option("inferSchema", True)
+              .csv(batch_2017_path)
+              .withColumnRenamed("_c0","value")
+          )
+
+for key, value in fixed_width_column_defs.items():
+    batch_2017 = batch_2017.withColumn(key, batch_2017["value"].substr(value[0],value[1]))
+    
+batch_2017 = (batch_2017
+              .drop("value")
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp())
+             )
+display(batch_2017)
 
 # COMMAND ----------
 
