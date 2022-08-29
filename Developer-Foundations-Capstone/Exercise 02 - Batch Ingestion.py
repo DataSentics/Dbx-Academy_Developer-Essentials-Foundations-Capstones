@@ -155,7 +155,34 @@ fixed_width_column_defs = {
 # COMMAND ----------
 
 # TODO
+from pyspark.sql.functions import *
 # Use this cell to complete your solution
+dbutils.fs.head(batch_2017_path,96)
+
+#Read from batch 2017 and rename column to value
+df = (spark
+      .read
+      .format("delta")
+      .csv(batch_2017_path)
+      .withColumnRenamed("_c0","value")
+     )
+
+#Go through dict key,value and create column with substring from starting point and the number of bytes
+for key, val in fixed_width_column_defs.items():
+    df = df.withColumn(key,df["value"].substr(val[0],val[1]))
+#Drop column value
+df = df.drop("value")
+
+#Replace empty string with null for all columns
+df = df.select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in df.columns])
+
+#Creates a string column for the file name of the current Spark task.
+df = df.withColumn("ingest_file_name", input_file_name())
+
+#timestamp of when the data was ingested as a DataFrame.
+df = df.withColumn("ingested_at", current_timestamp())
+display(df)
+
 
 # COMMAND ----------
 
