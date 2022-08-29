@@ -154,8 +154,14 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import substring,trim
+
+df = spark.read.format("text").option("header", True).load(batch_2017_path)
+for key, val in fixed_width_column_defs.items():
+    df=df.withColumn(key,df["value"].substr(val[0],val[1]))
+df=df.drop('value')
+df.columns = df.columns.str.replace(' ', '')
+display(df)
 
 # COMMAND ----------
 
