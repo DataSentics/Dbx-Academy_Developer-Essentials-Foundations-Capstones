@@ -62,8 +62,10 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
+
+
 
 # COMMAND ----------
 
@@ -93,8 +95,14 @@ reality_check_03_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df =(spark
+  .read
+  .format("delta")
+  .load(batch_source_path))
+df.createOrReplaceTempView("batch_temp_view")
+#spark.sql("select order_id,customer_id from batch_temp_view").show()
+
+spark.sql("cache table batched_orders AS select * from batch_temp_view")
 
 # COMMAND ----------
 
@@ -152,8 +160,19 @@ reality_check_03_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col,when,regexp_replace
+
+
+df2=sqlContext.table("batched_orders")
+df2=df2.withColumn("_error_ssn_format", when(col("sales_rep_ssn").like("%-%"), True).otherwise(False))
+df2=df2.withColumn("sales_rep_ssn", regexp_replace("sales_rep_ssn", "-", ""))
+df2=df2.withColumn("sales_rep_ssn",col("sales_rep_ssn").cast('Long'))
+df2=df2.withColumn("sales_rep_zip",col("sales_rep_zip").cast('Integer'))
+colsDrop = ("submitted_at", "order_id", "customer_id","shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip","product_id", "product_quantity", "product_sold_price")
+df2=df2.drop(*colsDrop)
+df2=df2.dropDuplicates(["sales_rep_id","sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip"])
+df2.write.format("delta").saveAsTable("sales_reps")
+display(df2)
 
 # COMMAND ----------
 
@@ -208,8 +227,21 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import to_timestamp
+df3=sqlContext.table("batched_orders")
+df3=(df3
+     .withColumn("submitted_at", (col("submitted_at")/1e6).cast("timestamp") )
+     .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
+     )
+colsDrop = ("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "product_id", "product_quantity", "product_sold_price")
+df3=df3.drop(*colsDrop)
+df3=df3.dropDuplicates(["submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip"])
+df3=df3.withColumn("submitted_yyyy_mm",date_format("submitted_at","yyyy-MM"))
+df3=df3.repartition(36)
+df3.write.partitionBy("submitted_yyyy_mm").format("delta").mode("overwrite").saveAsTable("orders")
+print(df3.rdd.getNumPartitions())
+
+display(df3)
 
 # COMMAND ----------
 

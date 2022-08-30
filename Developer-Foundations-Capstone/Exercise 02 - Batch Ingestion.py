@@ -154,13 +154,28 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-from pyspark.sql.functions import substring,trim
+from pyspark.sql.functions import trim,col,input_file_name,current_timestamp,when
 
-df = spark.read.format("text").option("header", True).load(batch_2017_path)
+df = (spark
+           .read
+           .format("delta")
+           .csv(batch_2017_path)
+           .withColumnRenamed("_c0","value")
+)
+
 for key, val in fixed_width_column_defs.items():
     df=df.withColumn(key,df["value"].substr(val[0],val[1]))
 df=df.drop('value')
-df.columns = df.columns.str.replace(' ', '')
+for c_name in df.columns:
+    df = df.withColumn(c_name, trim(col(c_name)))
+df = df.withColumn("ingest_file_name", input_file_name())
+df=df.withColumn("ingested_at", current_timestamp())
+for name in df.columns:
+       df=df.withColumn(name,when(col(name)=="",None).otherwise(col(name)))
+
+
+
+df.write.format("delta").mode("overwrite").option("overwriteSchema",True).save(batch_target_path)
 display(df)
 
 # COMMAND ----------
@@ -194,8 +209,25 @@ reality_check_02_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_2b=(spark
+           .read
+           .option("header",True)
+           .option("sep", "\t")
+           .csv(batch_2018_path)
+)
+
+df2 =(spark
+  .read
+  .format("delta")
+  .load(batch_target_path))
+
+
+df_2b =df_2b.withColumn("ingest_file_name", input_file_name())
+df_2b=df_2b.withColumn("ingested_at", current_timestamp())
+bigDF2 = df2.union(df_2b)
+bigDF3=bigDF2.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in bigDF.columns])
+bigDF3.write.format("delta").mode("overwrite").save(batch_target_path)
+
 
 # COMMAND ----------
 
@@ -233,8 +265,26 @@ reality_check_02_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+  df_2c=(spark
+           .read
+           .option("header",True)
+           .option("sep", ",")
+           .csv(batch_2019_path)
+)
+
+df_target =(spark
+  .read
+  .format("delta")
+  .load(batch_target_path))
+
+df_2c=df_2c.withColumn("ingest_file_name", input_file_name())
+df_2c=df_2c.withColumn("ingested_at", current_timestamp())
+for old, new in zip(df_2c.columns, fixed_width_column_defs.keys()):
+    df_2c = df_2c.withColumnRenamed(old, new)
+result_df=df_2c.union(df_target)
+result_df=result_df.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in result_df.columns])
+result_df.write.format("delta").mode("overwrite").save(batch_target_path)
+
 
 # COMMAND ----------
 
