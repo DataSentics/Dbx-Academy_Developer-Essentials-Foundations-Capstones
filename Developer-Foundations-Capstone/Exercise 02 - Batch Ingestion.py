@@ -146,14 +146,6 @@ fixed_width_column_defs = {
   "product_sold_price": (390, 20)
 }
 
-# COMMAND ----------
-
-df = spark.read.format("text").option("header", True).load(batch_2017_path)
-
-
-for k in fixed_width_column_defs.keys():
-    df = (df.withColumn(k,df["value"].substr(fixed_width_column_defs[k][0],fixed_width_column_defs[k][1])))
-display(df.drop("value"))
 
 # COMMAND ----------
 
@@ -165,6 +157,30 @@ display(df.drop("value"))
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+ 
+df = spark.read.format("text").option("header", True).load(batch_2017_path)
+
+
+for k in fixed_width_column_defs.keys():
+    #Read with the help of dict
+    df = (df.withColumn(k,df["value"].substr(fixed_width_column_defs[k][0],fixed_width_column_defs[k][1])))
+    #Trim whie spaces
+    df = df.withColumn(k, trim(col(k)))
+    
+#Add file path column and drop values column    
+df = df.withColumn("ingest_file_name", input_file_name()).drop("value")
+
+#Drop null columns
+df = df.select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in df.columns])
+
+#Add time ingest_at column
+df = df.withColumn("ingested_at", current_timestamp())
+
+#Write the file
+df.write.format("delta").mode("overwrite").save(batch_target_path)
+
+# display(df)
 
 # COMMAND ----------
 
@@ -199,6 +215,34 @@ reality_check_02_a()
 
 # TODO
 # Use this cell to complete your solution
+# dbutils.fs.head(batch_2018_path)
+
+#Read the previous df
+df3 = (spark 
+  .read 
+  .format("delta") 
+  .load(batch_target_path))
+
+#Read the csv
+df1 = (spark.read.option("delimiter","\t")
+       .option("header", "true")
+       .csv(batch_2018_path))
+
+#Add file path column and time ingestet column
+df1 = df1.withColumn("ingest_file_name", input_file_name())
+df1 = df1.withColumn("ingested_at", current_timestamp())
+
+#Union them 
+unionDF = df1.union(df3)
+
+#Replace nulls
+df4=unionDF.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in unionDF.columns])
+
+
+# print(df4.count())
+
+#Write over the previous file
+df4.write.format("delta").mode("overwrite").save(batch_target_path)
 
 # COMMAND ----------
 
@@ -238,6 +282,34 @@ reality_check_02_b()
 
 # TODO
 # Use this cell to complete your solution
+# dbutils.fs.head(batch_2019_path)
+
+df_2019 = (spark.read.option("delimiter",",")
+       .option("header", "true")
+       .csv(batch_2019_path))
+
+df_prev = (spark 
+  .read 
+  .format("delta") 
+  .load(batch_target_path))
+
+column_names = df_2019.columns
+i = 0
+for key in fixed_width_column_defs.keys():
+    df_2019 = df_2019.withColumnRenamed(column_names[i], key)
+    i += 1
+
+df_2019 = (df_2019
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp()))    
+
+unionDF_2019 = df_2019.union(df_prev)
+
+unionDF_2019_final=unionDF_2019.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in unionDF_2019.columns])
+    
+print(unionDF_2019_final.count())
+
+unionDF_2019_final.write.format("delta").mode("overwrite").save(batch_target_path)
 
 # COMMAND ----------
 
