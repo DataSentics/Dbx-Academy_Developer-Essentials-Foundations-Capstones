@@ -163,13 +163,12 @@ dbutils.fs.head(batch_2017_path,96)
 df = (spark
       .read
       .format("delta")
-      .csv(batch_2017_path)
-      .withColumnRenamed("_c0","value")
+      .text(batch_2017_path)
      )
 
 #Go through dict key,value and create column with substring from starting point and the number of bytes
 for key, val in fixed_width_column_defs.items():
-    df = df.withColumn(key,df["value"].substr(val[0],val[1]))
+    df = df.withColumn(key,trim(df["value"].substr(val[0],val[1])))
 #Drop column value
 df = df.drop("value")
 
@@ -179,8 +178,13 @@ df = df.select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in df.col
 #Creates a string column for the file name of the current Spark task.
 df = df.withColumn("ingest_file_name", input_file_name())
 
-#timestamp of when the data was ingested as a DataFrame.
+#Timestamp of when the data was ingested as a DataFrame.
 df = df.withColumn("ingested_at", current_timestamp())
+
+#Write in batch_target_path with delta format
+df.write.format("delta").mode("overwrite").save(batch_target_path)
+
+#display dataframe
 display(df)
 
 
@@ -216,7 +220,42 @@ reality_check_02_a()
 # COMMAND ----------
 
 # TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+# #Seeing data in head 
+# dbutils.fs.head(batch_2018_path,9600)
+#Read from batch 2018 and add separator "\t"
+batch_2018_df = (spark
+      .read
+      .option("sep","\t")
+      .option('header',True)
+      .csv(batch_2018_path)
+     )
+
+#Creates a string column for the file name of the current Spark task.
+batch_2018_df = batch_2018_df.withColumn("ingest_file_name", input_file_name())
+
+#Timestamp of when the data was ingested as a DataFrame.
+batch_2018_df = batch_2018_df.withColumn("ingested_at", current_timestamp())
+
+#Read the path from batch_target_path with delta format
+batch_target_df = (spark
+       .read
+       .format("delta")
+       .load(batch_target_path)
+      )
+
+#Union the 2 dataframes toghether
+unionized_df = batch_2018_df.union(batch_target_df)
+
+#replace string value "null" with SQL value null
+unionized_df = unionized_df.replace("null",None)
+
+#Save and overwrite to batch_target_path
+unionized_df.write.format("delta").mode("overwrite").option("overwriteSchema",True).save(batch_target_path)
+
+
+display(unionized_df)
 
 # COMMAND ----------
 
@@ -255,7 +294,64 @@ reality_check_02_b()
 # COMMAND ----------
 
 # TODO
-# Use this cell to complete your solution
+# dbutils.fs.head(batch_2019_path,9600)
+# #Read from batch 2019 and add separator "\t"
+# batch_2019_df = (spark
+#       .read
+#       .option("sep",",")
+#       .option("header",True)
+#       .csv(batch_2019_path)
+#      )
+
+# #Read the path from batch_target_path with delta format
+# batch_target_df = (spark
+#        .read
+#        .format("delta")
+#        .load(batch_target_path)
+#       )
+
+
+# batch_2019_df = batch_2019_df.withColumn("ingest_file_name", input_file_name())
+
+# #Timestamp of when the data was ingested as a DataFrame.
+# batch_2019_df = batch_2019_df.withColumn("ingested_at", current_timestamp())
+
+# for old, new in zip(batch_2019_df.columns, fixed_width_column_defs.keys()):
+#     batch_2019_df = batch_2019_df.withColumnRenamed(old, new)
+
+
+# #Union the 2 dataframes toghether
+# unionized_df2 = batch_2019_df.union(batch_target_df)
+
+# #replace string value "null" with SQL value null
+# unionized_df2 = unionized_df2.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in result_df.columns])
+
+# unionized_df2.write.format("delta").mode("overwrite").save(batch_target_path)
+
+# print(unionized_df2.count())
+df_2c=(spark
+           .read
+           .option("header",True)
+           .option("sep", ",")
+           .csv(batch_2019_path)
+)
+
+
+
+df_target =(spark
+  .read
+  .format("delta")
+  .load(batch_target_path))
+
+
+
+df_2c=df_2c.withColumn("ingest_file_name", input_file_name())
+df_2c=df_2c.withColumn("ingested_at", current_timestamp())
+for old, new in zip(df_2c.columns, fixed_width_column_defs.keys()):
+    df_2c = df_2c.withColumnRenamed(old, new)
+result_df=df_2c.union(df_target)
+result_df=result_df.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in result_df.columns])
+result_df.write.format("delta").mode("overwrite").save(batch_target_path)
 
 # COMMAND ----------
 

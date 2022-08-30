@@ -62,8 +62,9 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -93,8 +94,15 @@ reality_check_03_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+
+
+batched_orders = (spark
+       .read
+       .format("delta")
+       .load(batch_target_path)
+      )
+batch_target_df.createOrReplaceTempView("batch_temp_view")
+spark.sql("cache table batched_orders AS select * from batch_temp_view")
 
 # COMMAND ----------
 
@@ -146,14 +154,38 @@ reality_check_03_b()
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #3.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+#import from view into dataframe
+df=sqlContext.table("batch_temp_view")
+
+#put into error ssn if sales rep contains "-"
+df=df.withColumn("_error_ssn_format", when(col("sales_rep_ssn").like("%-%"), True).otherwise(False))
+
+#replace "-" in the column sales_rep with nothing
+df=df.withColumn("sales_rep_ssn", pyspark.sql.functions.regexp_replace("sales_rep_ssn", "-", ""))
+
+#cast data types to long and int
+df=df.withColumn("sales_rep_ssn",df.sales_rep_ssn.cast('Long'))
+df=df.withColumn("sales_rep_zip",df.sales_rep_ssn.cast('Integer'))
+
+#drop unwanted table columns
+df=df.drop("submitted_at", "order_id", "customer_id","shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip","product_id", "product_quantity", "product_sold_price")
+
+#drop duplicates withouth the last two columns
+df=df.dropDuplicates(["sales_rep_id","sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip"])
+
+df.write.format("delta").saveAsTable("sales_reps")
+display(df)
 
 # COMMAND ----------
 
@@ -208,8 +240,18 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+#import from view into dataframe
+df=sqlContext.table("batch_temp_view")
+df = (df
+      .withColumn("submitted_at",(col("submitted_at")/1e6).cast("timestamp"))
+      .withColumn("shipping_address_zip",df.shipping_address_zip.cast("Integer"))
+      .drop("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip","product_id", "product_quantity", "product_sold_price")     .dropDuplicates(["submitted_at","order_id","customer_id","sales_rep_id","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state","shipping_address_zip"])
+      .withColumn("submitted_yyyy_mm",to_date("submitted_at","YYYY-MM").cast("String"))
+     )
+df.repartition(36)
+df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").partitionBy("submitted_yyyy_mm").saveAsTable("orders")
+display(df)
 
 # COMMAND ----------
 
@@ -254,8 +296,15 @@ reality_check_03_d()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df=sqlContext.table("batch_temp_view")
+
+df = (df
+     .drop("submitted_at","customer_id","sales_rep_ssn","sales_rep_id", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip","shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip")
+      .withColumn("product_quantity",df.product_quantity.cast("Integer"))
+      .withColumn("product_sold_price",df.product_sold_price.cast("decimal(10,2)"))
+     )
+df.write.format("delta").mode("overwrite").saveAsTable("line_items")
+display(df)
 
 # COMMAND ----------
 
