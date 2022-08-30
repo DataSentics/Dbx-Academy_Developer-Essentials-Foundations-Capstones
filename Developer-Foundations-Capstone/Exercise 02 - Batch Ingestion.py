@@ -154,8 +154,35 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+batch_2017_path = "dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2017.txt"
+
+
+batch_2017 = (spark
+              .read
+              .format("delta")
+              .csv(batch_2017_path)
+              .withColumnRenamed("_c0","value")
+          )
+ 
+for key, value in fixed_width_column_defs.items():
+    batch_2017 = batch_2017.withColumn(key, trim(batch_2017["value"].substr(value[0],value[1])))
+    
+    
+batch_2017 = batch_2017.drop("value")    
+    
+batch_2017 = (batch_2017
+              .select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in batch_2017.columns])
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp())
+             )
+
+(batch_2017
+ .write
+ .mode("overwrite")
+ .save(batch_target_path))
+
 
 # COMMAND ----------
 
@@ -188,8 +215,35 @@ reality_check_02_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+batch_2018_path = "dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2018.csv"
+
+batch_2018 = (spark
+              .read
+              .option("sep", "\t")
+              .option("header", True)
+              .format("delta")
+              .csv(batch_2018_path)
+          )
+
+
+batch_2018 = (batch_2018
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp())
+             )
+
+new_barch = batch_2018.unionAll(batch_2017)
+
+new_barch = new_barch.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in new_barch.columns])
+
+(new_barch
+ .write
+ .format("delta")
+ .mode("overwrite")
+ .save(batch_target_path))
+
+display(new_barch)
 
 # COMMAND ----------
 
@@ -227,8 +281,50 @@ reality_check_02_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+batch_2019_path = "dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2019.csv"
+
+batch_2019 = (spark
+              .read
+              .option("sep", ",")
+              .option("header", True)
+              .format("delta")
+              .csv(batch_2019_path)
+          )
+
+batch_2019 = (batch_2019
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp())
+              .withColumnRenamed("submittedAt", "submitted_at")
+              .withColumnRenamed("orderId", "order_id")
+              .withColumnRenamed("customerId", "customer_id")
+              .withColumnRenamed("salesRepId", "sales_rep_id")
+              .withColumnRenamed("salesRepSsn", "sales_rep_ssn")
+              .withColumnRenamed("salesRepFirstName", "sales_rep_first_name")
+              .withColumnRenamed("salesRepLastName", "sales_rep_last_name")
+              .withColumnRenamed("salesRepAddress", "sales_rep_address")
+              .withColumnRenamed("salesRepCity", "sales_rep_city")
+              .withColumnRenamed("salesRepState", "sales_rep_state")
+              .withColumnRenamed("salesRepZip", "sales_rep_zip")
+              .withColumnRenamed("shippingAddressAttention", "shipping_address_attention")
+              .withColumnRenamed("shippingAddressAddress", "shipping_address_address")
+              .withColumnRenamed("shippingAddressCity", "shipping_address_city")
+              .withColumnRenamed("shippingAddressState", "shipping_address_state")
+              .withColumnRenamed("shippingAddressZip", "shipping_address_zip")
+              .withColumnRenamed("productId", "product_id")
+              .withColumnRenamed("productQuantity", "product_quantity")
+              .withColumnRenamed("productSoldPrice", "product_sold_price")
+             )
+newer_barch = batch_2019.unionAll(new_barch)
+
+newer_barch = newer_barch.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in newer_barch.columns])
+
+(newer_barch
+ .write
+ .format("delta")
+ .mode("overwrite")
+ .save(batch_target_path))
+
+
 
 # COMMAND ----------
 

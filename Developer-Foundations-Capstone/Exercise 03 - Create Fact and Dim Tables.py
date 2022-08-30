@@ -62,8 +62,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -93,8 +93,17 @@ reality_check_03_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+batch_table = (spark
+              .read
+              .format("delta")
+              .load(batch_source_path)
+)
+
+batch_table.createOrReplaceTempView("batch_temp_view")
+
+spark.sql("cache table batched_orders AS select * from batch_temp_view")
+
+
 
 # COMMAND ----------
 
@@ -152,8 +161,36 @@ reality_check_03_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import regexp_replace, col, when
+
+order_table = sqlContext.table("batched_orders")
+
+order_table = (order_table
+                         .withColumn("_error_ssn_format", when(col("sales_rep_ssn").like("%-%"), True).otherwise(False))
+                         .withColumn("sales_rep_ssn", col("sales_rep_ssn").cast("Long"))
+                         .withColumn("sales_rep_zip", col("sales_rep_zip").cast("Integer"))
+                         )
+
+
+drop_cols = ("submitted_at", "order_id", "customer_id","shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip","product_id", "product_quantity", "product_sold_price")
+
+drop_dub_cold = ("sales_rep_id","sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip")
+
+order_table = (order_table
+               .drop(*drop_cols)
+               .dropDuplicates(drop_dub_cold)
+               )
+
+
+(order_table
+ .write
+ .format("delta")
+ .saveAsTable(sales_reps_table)
+)
+
+display(order_table)
+
+
 
 # COMMAND ----------
 
@@ -208,8 +245,43 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col, date_format, coalesce
+
+order_table = sqlContext.table("batched_orders")
+
+order_table = (order_table
+               .withColumn("submitted_at", (col("submitted_at") / 1e6).cast("Timestamp"))
+               .withColumn("shipping_address_zip", col("shipping_address_zip").cast("Integer"))
+)
+
+drop_col = ("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "product_id", "product_quantity", "product_sold_price")
+drop_dub_cold = ("submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip")
+
+order_table = (order_table
+               .drop(*drop_col)
+               .dropDuplicates(drop_dub_cold)
+)
+
+order_table = (order_table
+               .withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
+               
+)
+
+
+(order_table
+ .write
+ .format("delta")
+ .partitionBy("submitted_yyyy_mm")
+ .mode("overwrite")
+ .saveAsTable("orders")
+)
+
+#order_table.printSchema()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DROP TABLE orders
 
 # COMMAND ----------
 
