@@ -157,48 +157,55 @@ fixed_width_column_defs = {
 # COMMAND ----------
 
 # TODO
-
 # Use this cell to complete your solution
 from pyspark.sql.functions import *
+# dbutils.fs.rm(batch_target_path, True)
 
-first_set_2017_df = (spark
+table_first_set_2017_f = (spark
            .read
            .text(batch_2017_path)
           )
+for name, val in  fixed_width_column_defs.items():
+    table_first_set_2017_f = table_first_set_2017_f.withColumn(name,substring(col("value"),val[0],val[1]))
 
-table_first_set_2017_f = (first_set_2017_df
-                            .withColumn("submitted_at", regexp_replace(substring(col("value"),1,15)," ",""))
-                            .withColumn("order_id", regexp_replace(substring(col("value"),16,40)," ",""))
-                            .withColumn("customer_id", regexp_replace(substring(col("value"),56,40)," ",""))
-                            .withColumn("sales_rep_id", regexp_replace(substring(col("value"),96,40)," ",""))
-                            .withColumn("sales_rep_ssn", regexp_replace(substring(col("value"),136,15)," ",""))
-                            .withColumn("sales_rep_first_name", regexp_replace(substring(col("value"),151, 15)," ",""))
-                            .withColumn("sales_rep_last_name", regexp_replace(substring(col("value"),166, 15)," ",""))
-                            .withColumn("sales_rep_address", regexp_replace(substring(col("value"),181, 40)," ",""))
-                            .withColumn("sales_rep_city", regexp_replace(substring(col("value"),221, 20)," ",""))
-                            .withColumn("sales_rep_state", regexp_replace(substring(col("value"),241, 2)," ",""))
-                            .withColumn("sales_rep_zip", regexp_replace(substring(col("value"),243, 5)," ",""))
-                            .withColumn("shipping_address_attention", regexp_replace(substring(col("value"),248, 30)," ",""))
-                            .withColumn("shipping_address_address", regexp_replace(substring(col("value"),278, 40)," ",""))
-                            .withColumn("shipping_address_city", regexp_replace(substring(col("value"),318, 20)," ",""))
-                            .withColumn("shipping_address_state", regexp_replace(substring(col("value"),338, 2)," ",""))
-                            .withColumn("shipping_address_zip", regexp_replace(substring(col("value"),340, 5)," ",""))
-                            .withColumn("product_id", regexp_replace(substring(col("value"),345, 40)," ",""))
-                            .withColumn("product_quantity", regexp_replace(substring(col("value"),385, 5)," ",""))
-                            .withColumn("product_sold_price", regexp_replace(substring(col("value"),390, 20)," ",""))
-                            .drop(col("value"))
-                         )
-for name in table_first_set_2017_f.columns:
-    table_first_set_2017_f=table_first_set_2017_f.withColumn(name, when(col(name)=="",None).otherwise(col(name)))
+table_first_set_2017_f = table_first_set_2017_f.drop(col("value"))  
 
+for c_name in table_first_set_2017_f.columns:
+    table_first_set_2017_f = table_first_set_2017_f.withColumn(c_name, trim(col(c_name)))                                                                 
+                                                                 
 table_first_set_2017_f= table_first_set_2017_f.withColumn("ingest_file_name", input_file_name())
 
 table_first_set_2017_f= table_first_set_2017_f.withColumn("ingested_at", current_timestamp())
+
+for name in table_first_set_2017_f.columns:
+    table_first_set_2017_f=table_first_set_2017_f.withColumn(name, when(col(name)=="",None).otherwise(col(name)))
 
 table_first_set_2017_f.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
 
 display(table_first_set_2017_f)
 
+# table_first_set_2017_f = (first_set_2017_df
+#                             .withColumn("submitted_at", regexp_replace(substring(col("value"),1,15)," ",""))
+#                             .withColumn("order_id", regexp_replace(substring(col("value"),16,40)," ",""))
+#                             .withColumn("customer_id", regexp_replace(substring(col("value"),56,40)," ",""))
+#                             .withColumn("sales_rep_id", regexp_replace(substring(col("value"),96,40)," ",""))
+#                             .withColumn("sales_rep_ssn", regexp_replace(substring(col("value"),136,15)," ",""))
+#                             .withColumn("sales_rep_first_name", regexp_replace(substring(col("value"),151, 15)," ",""))
+#                             .withColumn("sales_rep_last_name", regexp_replace(substring(col("value"),166, 15)," ",""))
+#                             .withColumn("sales_rep_address", regexp_replace(substring(col("value"),181, 40)," ",""))
+#                             .withColumn("sales_rep_city", regexp_replace(substring(col("value"),221, 20)," ",""))
+#                             .withColumn("sales_rep_state", regexp_replace(substring(col("value"),241, 2)," ",""))
+#                             .withColumn("sales_rep_zip", regexp_replace(substring(col("value"),243, 5)," ",""))
+#                             .withColumn("shipping_address_attention", regexp_replace(substring(col("value"),248, 30)," ",""))
+#                             .withColumn("shipping_address_address", regexp_replace(substring(col("value"),278, 40)," ",""))
+#                             .withColumn("shipping_address_city", regexp_replace(substring(col("value"),318, 20)," ",""))
+#                             .withColumn("shipping_address_state", regexp_replace(substring(col("value"),338, 2)," ",""))
+#                             .withColumn("shipping_address_zip", regexp_replace(substring(col("value"),340, 5)," ",""))
+#                             .withColumn("product_id", regexp_replace(substring(col("value"),345, 40)," ",""))
+#                             .withColumn("product_quantity", regexp_replace(substring(col("value"),385, 5)," ",""))
+#                             .withColumn("product_sold_price", regexp_replace(substring(col("value"),390, 20)," ",""))
+#                             .drop(col("value"))
+#                          )
 
 # COMMAND ----------
 
