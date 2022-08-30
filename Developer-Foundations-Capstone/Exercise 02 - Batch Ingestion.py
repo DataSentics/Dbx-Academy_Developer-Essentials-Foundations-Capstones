@@ -154,8 +154,46 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+dbutils.fs.rm(batch_target_path, True)
+
+#Read from batch 2017 and rename column to value
+df = (spark
+      .read
+      .format("delta")
+      .text(batch_2017_path)
+     )
+
+
+
+#Go through dict key,value and create column with substring from starting point and the number of bytes
+for key, val in fixed_width_column_defs.items():
+    df = df.withColumn(key,trim(df["value"].substr(val[0],val[1])))
+    
+#Drop column value
+df = df.drop("value")
+
+#Replace empty string with SQL Null
+df = df.select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in df.columns])
+
+#Add ingest_file_name with ingested file_name as value
+df = df.withColumn("ingest_file_name", input_file_name())
+
+#Add ingested_at column as timestamp
+df = df.withColumn("ingested_at", current_timestamp())
+
+display(df)
+
+df.write.format("delta").mode("overwrite").save(batch_target_path)
+
+print(batch_target_path)
+
+
+
+    
 
 # COMMAND ----------
 
@@ -190,6 +228,41 @@ reality_check_02_a()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+
+
+df_2018 = (spark
+      .read
+      .option("sep", "\t")
+      .option("header", True)
+      .csv(batch_2018_path)
+     )
+
+df_2017 = (spark
+           .read
+           .format("delta")
+           .load(batch_target_path)
+
+)
+
+#Add ingest_file_name with ingested file_name as value
+df_2018 = df_2018.withColumn("ingest_file_name", input_file_name())
+
+#Add ingested_at column as timestamp
+df_2018 = df_2018.withColumn("ingested_at", current_timestamp())
+
+#Replace "null" with SQL Null
+
+#Convert table to string
+
+
+#df_union3 = df_2018.union(df_2017)
+df_union3 = df_union2.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
+
+
+df_union3.write.format("delta").mode("overwrite").save(batch_target_path)
+
 
 # COMMAND ----------
 
@@ -227,8 +300,41 @@ reality_check_02_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+dbutils.fs.head(batch_2019_path, 1024)
+
+df_2019 = (spark
+           .read
+          .option("sep", ",")
+          .option("header", True)
+          .csv(batch_2019_path)
+           
+)
+
+previous_dataset =(spark
+                   .read
+                   .format("delta")
+                   .load(batch_target_path)
+                  )
+
+#Add ingest_file_name with ingested file_name as value
+df_2019 = df_2019.withColumn("ingest_file_name", input_file_name())
+
+#Add ingested_at column as timestamp
+df_2019 = df_2019.withColumn("ingested_at", current_timestamp())
+
+column_names = df_2019.columns
+i = 0
+for key in fixed_width_column_defs.keys():
+    df_2019 = df_2019.withColumnRenamed(column_names[i], key)
+    i += 1
+    
+#df_unioned_all2 = df_2019.union(previous_dataset)
+#df_unioned_all2 = df_unioned_all.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
+
+
+df_unioned_all2.write.format("delta").mode("overwrite").save(batch_target_path)
 
 # COMMAND ----------
 
