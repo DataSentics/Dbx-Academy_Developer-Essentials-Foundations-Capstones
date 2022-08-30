@@ -49,6 +49,7 @@
 files = dbutils.fs.ls(f"{working_dir}/raw/orders/batch") # List all the files
 display(files)                                           # Display the list of files
 
+
 # COMMAND ----------
 
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #2.A - Ingest Fixed-Width File</h2>
@@ -156,6 +157,7 @@ fixed_width_column_defs = {
 # COMMAND ----------
 
 # TODO
+
 # Use this cell to complete your solution
 from pyspark.sql.functions import *
 
@@ -185,7 +187,16 @@ table_first_set_2017_f = (first_set_2017_df
                             .withColumn("product_quantity", regexp_replace(substring(col("value"),385, 5)," ",""))
                             .withColumn("product_sold_price", regexp_replace(substring(col("value"),390, 20)," ",""))
                             .drop(col("value"))
-)
+                         )
+for name in table_first_set_2017_f.columns:
+    table_first_set_2017_f=table_first_set_2017_f.withColumn(name, when(col(name)=="",None).otherwise(col(name)))
+
+table_first_set_2017_f= table_first_set_2017_f.withColumn("ingest_file_name", input_file_name())
+
+table_first_set_2017_f= table_first_set_2017_f.withColumn("ingested_at", current_timestamp())
+
+table_first_set_2017_f.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
+
 display(table_first_set_2017_f)
 
 
@@ -222,6 +233,30 @@ reality_check_02_a()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df_2018 =( spark
+           .read
+           .option("sep", "\t")
+           .option("header", True)
+           
+           .csv(batch_2018_path)
+          )
+df_2018 = df_2018.withColumn("ingest_file_name", input_file_name())
+df_2018 = df_2018.withColumn("ingested_at", current_timestamp())
+
+df_2017 = (spark
+          .read
+          .format("delta")
+          .load(batch_target_path))
+df_union = df_2018.union(df_2017)
+
+for name in df_union.columns:
+    df_union = df_union.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
+
+
+df_union.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
+display(df_union)
 
 # COMMAND ----------
 
@@ -261,6 +296,54 @@ reality_check_02_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df_2019 =( spark
+           .read
+           .option("sep", ",")
+           .option("header", True)
+           .csv(batch_2019_path)
+          )
+df_2019 = df_2019.withColumn("ingest_file_name", input_file_name())
+df_2019 = df_2019.withColumn("ingested_at", current_timestamp())
+
+for old_col ,new_col in zip(df_2019.columns, fixed_width_column_defs.keys()):
+    df_2019 = df_2019.withColumnRenamed(old_col,new_col)
+
+# df_2019 = (df_2019
+#           .withColumnRenamed("submittedAt","")
+#           .withColumnRenamed("orderId","")
+#           .withColumnRenamed("customerId","")
+#           .withColumnRenamed("salesRepId","")
+#           .withColumnRenamed("salesRepSsn","")
+#           .withColumnRenamed("salesRepFirstName","")
+#           .withColumnRenamed("salesRepLastName","")
+#           .withColumnRenamed("salesRepLastName","")
+#           .withColumnRenamed("salesRepAddress","")
+#           .withColumnRenamed("salesRepCity","")
+#           .withColumnRenamed("salesRepState","")
+#           .withColumnRenamed("salesRepZip","")
+#           .withColumnRenamed("shippingAddressAttention","")
+#           .withColumnRenamed("shippingAddressAddress","")
+#           .withColumnRenamed("shippingAddressCity","")
+#           .withColumnRenamed("shippingAddressState","")
+#           .withColumnRenamed("shippingAddressZip","")
+#           .withColumnRenamed("productId","")
+#           .withColumnRenamed("productQuantity","")
+#           .withColumnRenamed("productSoldPrice","")
+#           )
+
+df_2017_2018 = (spark
+          .read
+          .format("delta")
+          .load(batch_target_path))
+df2_union = df_2019.union(df_2017_2018)
+for name in df2_union.columns:
+    df2_union = df2_union.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
+    
+df2_union.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
+
+print(df2_union.count())
 
 # COMMAND ----------
 
