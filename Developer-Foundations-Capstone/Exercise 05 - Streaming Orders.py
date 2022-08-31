@@ -65,6 +65,10 @@
 
 # COMMAND ----------
 
+dbutils.fs.rm(orders_checkpoint_path,True)
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #5.A - Use Database</h2>
 # MAGIC 
 # MAGIC Each notebook uses a different Spark session and will initially use the **`default`** database.
@@ -84,6 +88,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -129,8 +134,57 @@ reality_check_05_a()
 
 # COMMAND ----------
 
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+# TODO
+# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+
+
+df = spark.read.json(stream_path)
+sch = df.schema
+df = (spark
+           .readStream
+           .schema(sch)
+           .option("maxFilesPerTrigger", 1)
+           .json(stream_path)
+)
+df = df.drop("products")
+#Creates a string column for the file name of the current Spark task.
+#Timestamp of when the data was ingested as a DataFrame.
+df = (df.withColumn("ingest_file_name", input_file_name())
+      .withColumn("ingested_at", current_timestamp())
+      .withColumnRenamed("submittedAt","submitted_at")
+      .withColumn("submitted_at",to_timestamp(col("submitted_at")))
+      .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+      .withColumnRenamed("customerId","customer_id")
+      .withColumnRenamed("orderId","order_id")
+      .withColumnRenamed("salesRepId","sales_rep_id")
+      .withColumn("shipping_address_attention",df.shippingAddress.attention)
+      .withColumn("shipping_address_city",df.shippingAddress.city)
+      .withColumn("shipping_address_address",df.shippingAddress.address)
+      .withColumn("shipping_address_state",df.shippingAddress.state)
+      .withColumn("shipping_address_zip",df.shippingAddress.zip.cast("integer"))
+      .drop("shippingAddress")
+     )
+
+# display(df)
+devices_query = (df
+                 .writeStream
+                 .outputMode("append")
+                 .format("delta")
+                 
+                 .queryName(orders_table)
+                 .trigger(processingTime="1 second")
+                 .option("checkpointLocation", orders_checkpoint_path)
+                 .toTable(orders_table)
+                )
+
 
 # COMMAND ----------
 
@@ -189,6 +243,44 @@ reality_check_05_b()
 
 # TODO
 # Use this cell to complete your solution
+
+df = spark.read.json(stream_path)
+sch = df.schema
+df = (spark
+           .readStream
+           .schema(sch)
+           .option("maxFilesPerTrigger", 1)
+           .json(stream_path)
+)
+# display(df)
+df = (df.withColumn("products",explode(col("products"))))
+# print(df.columns)
+df = (df.withColumn("order_id",col("orderId"))
+     .withColumn("product_id",df.products.productId)
+     .withColumn('product_quantity',df.products.quantity.cast('int'))
+     .withColumn("product_sold_price",df.products.soldPrice.cast('decimal(10,2)'))
+     .withColumn("ingest_file_name", input_file_name())
+     .withColumn("ingested_at", current_timestamp())
+     )
+
+df = df.drop('customerId', 'orderId', 'products', 'salesRepId', 'shippingAddress', 'submittedAt')
+df1 = sqlContext.table("line_items")
+# print(df1.columns)
+devices_query = (df
+                 .writeStream
+                 .outputMode("append")
+                 .format("delta")    
+                 .queryName(line_items_table)
+                 .trigger(processingTime="1 second")
+                 .option("checkpointLocation", line_items_checkpoint_path)
+                 .toTable(line_items_table)
+                )
+# display(df)
+
+# COMMAND ----------
+
+print(df1.columns)
+
 
 # COMMAND ----------
 

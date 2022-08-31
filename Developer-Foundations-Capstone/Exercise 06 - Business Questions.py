@@ -49,6 +49,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -80,6 +81,10 @@ reality_check_06_a()
 
 # TODO
 # Use this cell to complete your solution
+df1 = sqlContext.table("orders")
+df1 = df1.groupBy("shipping_address_state").count().sort('count', ascending=False)
+df1.createOrReplaceTempView(question_1_results_table)
+display(df1)
 
 # COMMAND ----------
 
@@ -123,10 +128,29 @@ reality_check_06_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
 
-ex_avg = 0 # FILL_IN
-ex_min = 0 # FILL_IN
-ex_max = 0 # FILL_IN
+df1 = sqlContext.table("orders")
+df2 = sqlContext.table("line_items")
+df3 = sqlContext.table("products")
+df4 = sqlContext.table("sales_reps")
+print(f"orders={df1.columns}")
+print(f"line_items={df2.columns}")
+print(f"products={df3.columns}")
+print(f"sales_reps={df4.columns}")
+first = df1.join(df2, df1.order_id == df2.order_id)
+second = first.join(df3, first.product_id == df3.product_id)
+third = second.join(df4, second.sales_rep_id == df4.sales_rep_id)
+
+third = third.filter((col("color") == "green") & (col("shipping_address_state") == "NC") & (col("_error_ssn_format") == True))
+
+final = third.agg(avg(col("product_sold_price")),min(col("product_sold_price")),max(col("product_sold_price")))
+final.createOrReplaceTempView(question_2_results_table)
+display(final)
+
+ex_avg = 96.902253
+ex_min = 85.79
+ex_max = 113.43
 
 # COMMAND ----------
 

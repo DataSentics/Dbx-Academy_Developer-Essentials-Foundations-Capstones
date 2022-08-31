@@ -38,6 +38,10 @@
 
 # COMMAND ----------
 
+dbutils.fs.rm(batch_target_path, True)
+
+# COMMAND ----------
+
 # MAGIC %run ./_includes/Setup-Exercise-02
 
 # COMMAND ----------
@@ -233,16 +237,16 @@ df1 = df1.withColumn("ingest_file_name", input_file_name())
 df1 = df1.withColumn("ingested_at", current_timestamp())
 
 #Union them 
-unionDF = df1.union(df3)
+# unionDF = df1.union(df3)
 
-#Replace nulls
-df4=unionDF.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in unionDF.columns])
+# #Replace nulls
+df4=df1.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df1.columns])
 
 
 # print(df4.count())
 
 #Write over the previous file
-df4.write.format("delta").mode("overwrite").save(batch_target_path)
+df4.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
@@ -302,14 +306,14 @@ for key in fixed_width_column_defs.keys():
 df_2019 = (df_2019
               .withColumn("ingest_file_name", input_file_name())
               .withColumn("ingested_at", current_timestamp()))    
+df_2019_good = df_2019.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df_2019.columns])
+# unionDF_2019 = df_2019.union(df_prev)
 
-unionDF_2019 = df_2019.union(df_prev)
-
-unionDF_2019_final=unionDF_2019.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in unionDF_2019.columns])
+# unionDF_2019_final=unionDF_2019.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in unionDF_2019.columns])
     
-print(unionDF_2019_final.count())
+# print(unionDF_2019_final.count())
 
-unionDF_2019_final.write.format("delta").mode("overwrite").save(batch_target_path)
+df_2019_good.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 

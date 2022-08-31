@@ -54,6 +54,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -119,8 +120,23 @@ reality_check_04_b()
 
 # COMMAND ----------
 
+# MAGIC %sql 
+# MAGIC drop table products
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df2= spark.read.format("xml").option("rootTag", "products").option("rowTag", "product").option("inferSchema","true").load(products_xml_path)
+df2 = df2.withColumn("base_price",df2.price.getItem("_base_price"))
+df2 = df2.withColumn("color_adj",df2.price.getItem("_color_adj"))
+df2 = df2.withColumn("size_adj",df2.price.getItem("_size_adj"))
+df2 = df2.withColumnRenamed("_product_id","product_id")
+df2 = df2.withColumn("price",df2.price.getItem("usd"))
+df2 = df2.filter(col("price").isNotNull())
+df2.write.format("delta").saveAsTable(products_table)
 
 # COMMAND ----------
 

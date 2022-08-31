@@ -41,6 +41,15 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DROP VIEW batch_temp_view;
+# MAGIC drop table batched_orders;
+# MAGIC drop table orders;
+# MAGIC drop table sales_reps;
+# MAGIC drop table line_items;
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #3.A - Create &amp; Use Database</h2>
 # MAGIC 
 # MAGIC By using a specific database, we can avoid contention to commonly named tables that may be in use by other users of the workspace.
@@ -105,8 +114,10 @@ df = (spark
 df.createOrReplaceTempView("batch_temp_view")
 
 # spark.sql("select order_id,customer_id from batch_temp_view").show()
-
+# spark.sql("drop table batched_orders")
 spark.sql("cache table batched_orders AS select * from batch_temp_view")
+
+
 
 
 # COMMAND ----------
@@ -167,7 +178,7 @@ reality_check_03_b()
 
 # TODO
 # Use this cell to complete your solution
-from pyspark.sql.functions import col
+from pyspark.sql.functions import *
 
 df1 = sqlContext.table("batched_orders")
 df1 = df1.withColumn("_error_ssn_format", when(col("sales_rep_ssn").like("%-%"), True).otherwise(False))
@@ -176,21 +187,9 @@ df1 = df1.withColumn("sales_rep_ssn",col("sales_rep_ssn").cast("long"))
 df1 = df1.withColumn("sales_rep_zip",col("sales_rep_zip").cast("int"))
 df1 = df1.drop('submitted_at', 'order_id', 'customer_id','shipping_address_attention', 'shipping_address_address', 'shipping_address_city', 'shipping_address_state', 'shipping_address_zip','product_id', 'product_quantity', 'product_sold_price')
 df1 = df1.dropDuplicates(['sales_rep_id', 'sales_rep_ssn', 'sales_rep_first_name', 'sales_rep_last_name', 'sales_rep_address', 'sales_rep_city', 'sales_rep_state', 'sales_rep_zip'])
-spark.sql("drop table sales_reps")
-df1.write.format("delta").saveAsTable("sales_reps")
+# spark.sql("drop table sales_reps")
+df1.write.format("delta").saveAsTable(sales_reps_table)
 display(df1)
-# display(dropDisDF)
-# sales_rep_id:string
-# sales_rep_ssn:long
-# sales_rep_first_name:string
-# sales_rep_last_name:string
-# sales_rep_address:string
-# sales_rep_city:string
-# sales_rep_state:string
-# sales_rep_zip:integer
-# ingest_file_name:string
-# ingested_at:timestamp
-# _error_ssn_format:boolean
 
 # COMMAND ----------
 
@@ -245,28 +244,63 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-# TODO
+spark.conf.set("spark.sql.adaptive.enabled",'false')
+
+# COMMAND ----------
+
 # Use this cell to complete your solution
+from pyspark.sql.functions import to_timestamp, from_unixtime, date_format
 
-spark.conf.set("spark.sql.shuffle.partitions", "36")
 
-df2 = sqlContext.table("batched_orders")
-df2 = (df2
-     .withColumn("submitted_at", (col("submitted_at")/1e6).cast("timestamp") )
-     .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
-     )
-df3 = (df2
-      .drop("sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip","product_id","product_quantity","product_sold_price")
-      .dropDuplicates(["submitted_at","order_id","customer_id","sales_rep_id","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state","shipping_address_zip"])
-      )
 
-df4 = (df3
-      .withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
-      )
+#Load the table batched_orders (identified by the variable batch_temp_view)
+bo=spark.read.table("batched_orders")
 
-df4.write.partitionBy("submitted_yyyy_mm").format("delta").mode("overwrite").saveAsTable(f"{orders_table}")
-print(df.rdd.getNumPartitions())
-# display(df4)
+
+
+#Convert various columns from their string representation to the specified type:
+#The column submitted_at is a "unix epoch" (number of seconds since 1970-01-01 00:00:00 UTC) and should be represented as a Timestamp
+#The column shipping_address_zip should be represented as an Integer
+bo=bo.withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
+bo=bo.withColumn("shipping_address_zip", col("shipping_address_zip").cast("int"))
+
+
+
+#Remove the columns not directly related to the order record:
+#Sales reps columns: sales_rep_ssn, sales_rep_first_name, sales_rep_last_name, sales_rep_address, sales_rep_city, sales_rep_state, sales_rep_zip
+#Product columns: product_id, product_quantity, product_sold_price
+
+
+
+bo=bo.drop("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "product_id", "product_quantity", "product_sold_price")
+
+
+
+# display(bo)
+#Because there is one record per product ordered (many products per order), there will be duplicate records for each order. Remove all duplicate records, making sure to exclude ingest_file_name and ingested_at from the evaluation of duplicate records
+
+
+
+bo=bo.dropDuplicates(["order_id"])
+#bo=bo.dropDuplicates(["order_id","submitted_at","customer_id","sales_rep_id","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state",
+#"shipping_address_zip"])
+
+
+
+#Add the column submitted_yyyy_mm which is a string derived from submitted_at and is formatted as "yyyy-MM".
+bo=bo.withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+
+
+
+#Load the dataset to the managed delta table orders (identified by the variable orders_table)
+#In thise case, the data must also be partitioned by submitted_yyyy_mm
+bo=bo.repartition(36,"submitted_yyyy_mm")
+bo.write.format("delta").mode("overwrite").partitionBy("submitted_yyyy_mm").saveAsTable(orders_table)
+
+# COMMAND ----------
+
+display(bo.groupBy('submitted_yyyy_mm').count())
+
 
 
 # COMMAND ----------
@@ -314,6 +348,15 @@ reality_check_03_d()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import col
+from pyspark.sql.types import *
+
+df_e = sqlContext.table("batched_orders")
+df2_e = df_e.select("order_id","product_id","product_quantity","product_sold_price","ingest_file_name","ingested_at")
+df2_e =df2_e.withColumn("product_quantity",col("product_quantity").cast("int"))
+df2_e = df2_e.withColumn("product_sold_price",col("product_sold_price").cast(DecimalType(10,2)))        
+df2_e.write.format("delta").saveAsTable(line_items_table)
+display(df2_e.printSchema())
 
 # COMMAND ----------
 
