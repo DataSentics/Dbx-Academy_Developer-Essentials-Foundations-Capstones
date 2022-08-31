@@ -49,6 +49,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -80,6 +81,17 @@ reality_check_06_a()
 
 # TODO
 # Use this cell to complete your solution
+orders_df = spark.sql(f"SELECT * FROM {orders_table}")
+orders_df_agg = (orders_df
+                 .groupBy("shipping_address_state")
+                 .count()
+                 .sort('count', ascending=False)
+                )
+orders_df_agg.createOrReplaceTempView(question_1_results_table)
+#display(orders_df_agg)
+
+
+
 
 # COMMAND ----------
 
@@ -123,6 +135,12 @@ reality_check_06_b()
 
 # TODO
 # Use this cell to complete your solution
+orders_df = spark.sql(f"SELECT * FROM {orders_table}")
+products_df = spark.sql(f"SELECT * FROM {products_table}")
+line_items_df = spark.sql(f"SELECT * FROM {line_items_table}")
+sales_reps_df = spark.sql(f"SELECT * FROM {sales_reps_table}")
+
+orders_sales_reps_df =orders_df.join(sales_reps_df, how = "inner", on = "sales_rep_id")
 
 ex_avg = 0 # FILL_IN
 ex_min = 0 # FILL_IN
