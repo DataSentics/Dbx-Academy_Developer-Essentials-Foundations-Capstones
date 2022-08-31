@@ -42,6 +42,10 @@
 
 # COMMAND ----------
 
+dbutils.fs.rm(batch_target_path, True)
+
+# COMMAND ----------
+
 # MAGIC %md Run the following cell to preview a list of the files you will be processing in this exercise.
 
 # COMMAND ----------
@@ -206,6 +210,8 @@ display(table_first_set_2017_f)
 #                             .withColumn("product_sold_price", regexp_replace(substring(col("value"),390, 20)," ",""))
 #                             .drop(col("value"))
 #                          )
+for name in table_first_set_2017_f.columns:
+    table_first_set_2017_f = table_first_set_2017_f.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
 
 # COMMAND ----------
 
@@ -252,18 +258,17 @@ df_2018 =( spark
 df_2018 = df_2018.withColumn("ingest_file_name", input_file_name())
 df_2018 = df_2018.withColumn("ingested_at", current_timestamp())
 
-df_2017 = (spark
-          .read
-          .format("delta")
-          .load(batch_target_path))
-df_union = df_2018.union(df_2017)
+# df_2017 = (spark
+#           .read
+#           .format("delta")
+#           .load(batch_target_path))
 
-for name in df_union.columns:
-    df_union = df_union.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
+for name in df_2018.columns:
+    df_2018 = df_2018.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
 
 
-df_union.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
-display(df_union)
+df_2018.write.mode("append").format("delta").save(batch_target_path)
+
 
 # COMMAND ----------
 
@@ -340,17 +345,16 @@ for old_col ,new_col in zip(df_2019.columns, fixed_width_column_defs.keys()):
 #           .withColumnRenamed("productSoldPrice","")
 #           )
 
-df_2017_2018 = (spark
-          .read
-          .format("delta")
-          .load(batch_target_path))
-df2_union = df_2019.union(df_2017_2018)
-for name in df2_union.columns:
-    df2_union = df2_union.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
-    
-df2_union.write.mode("overwrite").option("overwriteSchema",True).format("delta").save(batch_target_path)
+# df_2017_2018 = (spark
+#           .read
+#           .format("delta")
+#           .load(batch_target_path))
 
-print(df2_union.count())
+for name in df_2019.columns:
+    df_2019 = df_2019.withColumn(name, when(col(name)=="null",None).otherwise(col(name)))
+    
+df_2019.write.mode("append").format("delta").save(batch_target_path)
+
 
 # COMMAND ----------
 

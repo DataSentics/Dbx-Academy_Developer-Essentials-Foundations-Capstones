@@ -41,6 +41,10 @@
 
 # COMMAND ----------
 
+spark.sql(f"DROP DATABASE IF EXISTS {user_db} CASCADE")
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #3.A - Create &amp; Use Database</h2>
 # MAGIC 
 # MAGIC By using a specific database, we can avoid contention to commonly named tables that may be in use by other users of the workspace.
@@ -99,24 +103,20 @@ reality_check_03_a()
 
 # COMMAND ----------
 
+# MAGIC  %sql
+# MAGIC DROP VIEW batched_orders;
+# MAGIC --drop table batched_orders;
+
+# COMMAND ----------
+
 from pyspark.sql.functions import *
-# TODO
-# Use this cell to complete your solution
-df = (spark
-          .read
-          .format("delta")
-          .load(batch_target_path))
-
-df.createOrReplaceTempView("batch_temp_view")
-
-# print(batch_temp_view)
-# display(df)
-# spark.sql("CLEAR CACHE")
-# df.unpersist()
+batched_orders = (spark
+       .read
+       .format("delta")
+       .load(batch_source_path)
+      )
+batched_orders.createOrReplaceTempView("batch_temp_view")
 spark.sql("cache table batched_orders AS select * from batch_temp_view")
-# spark.sql("drop table batched_orders ")
-# df.unpersist()
-# sqlContext.clearCache()
 
 # COMMAND ----------
 
@@ -241,20 +241,28 @@ reality_check_03_c()
 
 # COMMAND ----------
 
+spark.conf.set("spark.sql.adaptive.enabled",'false')
+
+# COMMAND ----------
+
+# dbutils.fs.ls("dbfs:/dbacademy/daniela-gabriela.vlasceanu@datasentics.com/developer-foundations-capstone/batch_orders_dirty.delta/")
 # TODO
 # Use this cell to complete your solution
-df_d=sqlContext.table("batch_temp_view")
+df_d=spark.read.table("batched_orders")
 df_d = (df_d
-     .withColumn("submitted_at", (col("submitted_at")/1e6).cast("timestamp") )
+     .withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
      .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
      )
 df_d=df_d.drop("sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip","product_id","product_quantity","product_sold_price")
 df_d=df_d.dropDuplicates(["submitted_at","order_id","customer_id","sales_rep_id","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state","shipping_address_zip"])
 
-df_d =df_d.withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
+df_d =df_d.withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
 #spark.sql("drop table orders")
-#df_d.write.partitionBy("submitted_yyyy_mm").option("overwriteSchema", True).format("delta").saveAsTable("orders")
+# spark.sql(f"drop table {orders_table}")
+df_d =df_d.repartition(36,"submitted_yyyy_mm")
+df_d.write.format("delta").mode("overwrite").partitionBy("submitted_yyyy_mm").saveAsTable(orders_table)
 # print(df_d.rdd.getNumPartitions())
+# # print(df_d.rdd.getNumPartitions())
 
 # COMMAND ----------
 
@@ -301,6 +309,18 @@ reality_check_03_d()
 
 # TODO
 # Use this cell to complete your solution
+df_d2=spark.read.table("batched_orders")
+
+for name in df_d2.columns:
+    if name not in ["order_id","product_id","product_quantity","product_sold_price","ingest_file_name","ingested_at"]:
+        df_d2=df_d2.drop(col(name))
+
+df_d2= (df_d2
+       .withColumn("product_quantity",col("product_quantity").cast("integer"))
+       .withColumn("product_sold_price",col("product_sold_price").cast("decimal(10,2)"))
+       )
+df_d2.printSchema()
+df_d2.write.format("delta").mode("overwrite").saveAsTable(line_items_table)
 
 # COMMAND ----------
 
