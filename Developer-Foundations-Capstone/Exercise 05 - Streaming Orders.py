@@ -83,7 +83,8 @@
 # COMMAND ----------
 
 # TODO
-# Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
+dbutils.fs.rm(orders_checkpoint_path,True)
 
 # COMMAND ----------
 
@@ -131,6 +132,49 @@ reality_check_05_a()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df = spark.read.json(stream_path)
+sch = df.schema
+df = (spark
+           .readStream
+           .schema(sch)
+           .option("maxFilesPerTrigger", 1)
+           .json(stream_path)
+)
+df = df.drop("products")
+#Creates a string column for the file name of the current Spark task.
+#Timestamp of when the data was ingested as a DataFrame.
+df = (df
+      .withColumn("ingest_file_name", input_file_name())
+      .withColumn("ingested_at", current_timestamp())
+      .withColumnRenamed("submittedAt","submitted_at")
+      .withColumnRenamed("customerId","customer_id")
+      .withColumnRenamed("orderId","order_id")
+      .withColumnRenamed("salesRepId","sales_rep_id")
+      .withColumn("shipping_address_attention",df.shippingAddress.attention)
+      .withColumn("shipping_address_city",df.shippingAddress.city)
+      .withColumn("shipping_address_address",df.shippingAddress.address)
+      .withColumn("shipping_address_state",df.shippingAddress.state)
+      .withColumn("shipping_address_zip",df.shippingAddress.zip.cast("integer"))
+      .drop("shippingAddress")
+     )
+
+df = (df
+      .withColumn("submitted_at",to_timestamp(col("submitted_at")))
+      .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+     )
+
+devices_query = (df
+                 .writeStream
+                 .outputMode("append")
+                 .format("delta")
+                 .partitionBy("submitted_yyyy_mm")
+                 .queryName(f"{orders_table}")
+                 .trigger(processingTime="1 second")
+                 .option("checkpointLocation", f"{orders_checkpoint_path}")
+                 .toTable(f"{orders_table}")
+                )
 
 # COMMAND ----------
 
@@ -187,8 +231,46 @@ reality_check_05_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+df = spark.read.json(stream_path)
+sch = df.schema
+df = (spark
+           .readStream
+           .schema(sch)
+           .option("maxFilesPerTrigger", 1)
+           .json(stream_path)
+)
+
+
+df = (df
+     .withColumnRenamed("orderId","order_id")
+     .withColumnRenamed("products", "product")
+     .withColumn("product", explode(col("product")))
+     )
+
+df= (df
+    .select("order_id", "product"))
+
+df = (df
+      .withColumn("product_id", df.product.productId.cast(StringType()))
+      .withColumn("product_quantity", df.product.quantity.cast(IntegerType()))
+      .withColumn("product_sold_price", df.product.soldPrice.cast(DecimalType(10,2)))
+      .withColumn("ingest_file_name", input_file_name())
+      .withColumn("ingested_at", current_timestamp())
+      .drop("product")
+     )
+
+devices_query = (df
+                 .writeStream
+                 .outputMode("append")
+                 .format("delta")
+                 .queryName(f"{line_items_table}")
+                 .trigger(processingTime="1 second")
+                 .option("checkpointLocation", f"{line_items_checkpoint_path}")
+                 .toTable(f"{line_items_table}")
+                )
 
 # COMMAND ----------
 

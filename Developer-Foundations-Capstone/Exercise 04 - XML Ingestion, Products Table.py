@@ -52,8 +52,9 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -107,6 +108,9 @@ reality_check_04_b()
 # MAGIC   * **`size_adj`**:**`double`**
 # MAGIC   * **`price`**:**`double`**
 # MAGIC   * **`size`**:**`string`**
+# MAGIC   
+# MAGIC   
+# MAGIC   
 # MAGIC 
 # MAGIC * Exclude any records for which a **`price`** was not included - these represent products that are not yet available for sale.
 # MAGIC * Load the dataset to the managed delta table **`products`** (identified by the variable **`products_table`**)
@@ -119,8 +123,33 @@ reality_check_04_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+
+
+df = (spark
+      .read
+      .format("com.databricks.spark.xml")
+      .option("rootTag", "products")
+      .option("rowTag", "product")
+      .option("inferSchema", True)
+      .load(f"{products_xml_path}")
+     )
+df2 = (df
+       .withColumn("color_adj", df.price._color_adj.cast(DoubleType()))
+       .withColumn("size_adj", df.price._size_adj.cast(DoubleType()))
+       .withColumn("base_price", df.price._base_price.cast(DoubleType()))
+       .withColumn("price", df.price.usd.cast(DoubleType()))
+       .withColumnRenamed("_product_id", "product_id")
+      )
+
+#Delete any possible null price rows
+df2 = (df2
+      .where(col("price").isNotNull())
+      )
+display(df2)
+df2.write.format("delta").mode("overwrite").saveAsTable(f"{products_table}")
 
 # COMMAND ----------
 

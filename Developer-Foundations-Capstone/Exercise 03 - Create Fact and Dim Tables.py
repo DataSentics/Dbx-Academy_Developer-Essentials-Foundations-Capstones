@@ -62,6 +62,7 @@
 
 # COMMAND ----------
 
+
 spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
 spark.sql(f"USE {user_db}")
 
@@ -93,15 +94,16 @@ reality_check_03_a()
 
 # COMMAND ----------
 
-df = (spark
-      .read
-      .format("delta")
-      .load(batch_source_path)
-)
-spark.catalog.dropTempView(f"{batch_temp_view}")
-df.createOrReplaceTempView(f"{batch_temp_view}_view")
-spark.sql(f"select * from {batch_temp_view}_view").show()
-spark.sql(f"cache table {batch_temp_view} AS select * from {batch_temp_view}_view")
+df =(spark
+  .read
+  .format("delta")
+  .load(batch_source_path))
+
+df.createOrReplaceTempView("batch_temp_view")
+spark.sql("drop view if exists batched_orders")
+
+
+spark.sql("cache table batched_orders AS select * from batch_temp_view")
 
 # COMMAND ----------
 
@@ -238,12 +240,11 @@ reality_check_03_c()
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
+spark.conf.set("spark.sql.adaptive.enabled", 'false')
 
-#spark.conf.set("spark.sql.shuffle.partitions",36)
 df=sqlContext.table(f"{batch_temp_view}")
 
 df = (df
-     .withColumn("submitted_at", (col("submitted_at")/1e6).cast("timestamp") )
      .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
      )
 
@@ -253,21 +254,20 @@ df2 = (df
       )
 
 df2 = (df2
-      .withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
+      .withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
+      .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
       )
 
 
-
+df2 = df2.repartition(36, "submitted_yyyy_mm")
 (df2
-    .repartition(36)
     .write
-    .partitionBy("submitted_yyyy_mm")
     .format("delta")
     .mode("overwrite")
+    .partitionBy("submitted_yyyy_mm")
     .saveAsTable(f"{orders_table}")
 )
-print(df2.rdd.getNumPartitions())
-
+display(df2.groupBy('submitted_yyyy_mm').count())
 
 # COMMAND ----------
 
@@ -312,8 +312,25 @@ reality_check_03_d()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+from pyspark.sql.types import IntegerType, DecimalType
+
+df=sqlContext.table(f"{batch_temp_view}")
+
+df2 = (df
+       .select("order_id", "product_id", "product_quantity", "product_sold_price", "ingest_file_name", "ingested_at")
+       .withColumn("product_quantity", col("product_quantity").cast(IntegerType()))
+       .withColumn("product_sold_price", col("product_sold_price").cast(DecimalType(10,2)))
+)
+       
+display(df2)
+
+(df2
+    .write
+    .format("delta")
+    .mode("overwrite")
+    .saveAsTable(f"{line_items_table}")
+)
 
 # COMMAND ----------
 

@@ -47,8 +47,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
+
 
 # COMMAND ----------
 
@@ -78,8 +78,17 @@ reality_check_06_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_orders = sqlContext.table(f"{orders_table}")
+
+df_orders_modified = (df_orders
+                      .groupBy("shipping_address_state")
+                      .count()
+                      .sort('count', ascending=False)
+
+
+)
+display(df_orders_modified)
+df_orders_modified.createOrReplaceTempView(f"{question_1_results_table}")
 
 # COMMAND ----------
 
@@ -123,10 +132,45 @@ reality_check_06_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
 
 ex_avg = 0 # FILL_IN
 ex_min = 0 # FILL_IN
 ex_max = 0 # FILL_IN
+
+df_orders = sqlContext.table(f"{orders_table}")
+df_line_items = sqlContext.table(f"{line_items_table}")
+df_products = sqlContext.table(f"{products_table}")
+df_sales_reps = sqlContext.table(f"{sales_reps_table}")
+
+# df_sales_reps = (df_sales_reps
+#                 .drop("ingest_file_name","ingested_at"))
+
+df_join1 = df_orders.join(df_sales_reps, "sales_rep_id")
+df_join2 = df_line_items.join(df_products, "product_id")
+df_joined_all = df_join1.join(df_join2, "order_id")
+
+df_joined_all = df_joined_all.drop("ingest_file_name","ingested_at")
+
+
+df_final = (df_joined_all
+             .where("color = 'green'")
+             .where("shipping_address_state = 'NC'")
+             .where("_error_ssn_format = True")
+            )
+
+df_avgs = (df_final
+          .agg(min(col("product_sold_price")))
+          .agg(avg(col(df_final.product_sold_price)))
+          .agg(max(col(df_finalproduct_sold_price)))
+          
+          )
+
+
+display(df_result)
+
+
+
 
 # COMMAND ----------
 

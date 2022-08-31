@@ -252,16 +252,11 @@ df_2018 = df_2018.withColumn("ingest_file_name", input_file_name())
 #Add ingested_at column as timestamp
 df_2018 = df_2018.withColumn("ingested_at", current_timestamp())
 
-#Replace "null" with SQL Null
 
-#Convert table to string
-
-
-#df_union3 = df_2018.union(df_2017)
-df_union3 = df_union2.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
+df_2018 = df_2018.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
 
 
-df_union3.write.format("delta").mode("overwrite").save(batch_target_path)
+df_2018.write.format("delta").mode("append").save(batch_target_path)
 
 
 # COMMAND ----------
@@ -302,7 +297,6 @@ reality_check_02_b()
 
 from pyspark.sql.functions import *
 
-dbutils.fs.head(batch_2019_path, 1024)
 
 df_2019 = (spark
            .read
@@ -331,10 +325,10 @@ for key in fixed_width_column_defs.keys():
     i += 1
     
 #df_unioned_all2 = df_2019.union(previous_dataset)
-#df_unioned_all2 = df_unioned_all.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
+df_2019 = df_2019.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df.columns])
 
 
-df_unioned_all2.write.format("delta").mode("overwrite").save(batch_target_path)
+df_2019.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
