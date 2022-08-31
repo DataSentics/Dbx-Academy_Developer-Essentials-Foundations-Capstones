@@ -140,7 +140,7 @@ products_df = (products_df
               )
 products_df = products_df.where(col("price").isNotNull())
 products_df.printSchema()
-spark.sql(f"drop table {products_table}")
+#spark.sql(f"drop table {products_table}")
 products_df.write.format("delta").saveAsTable(products_table)
 
 # COMMAND ----------

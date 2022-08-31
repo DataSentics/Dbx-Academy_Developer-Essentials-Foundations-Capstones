@@ -65,6 +65,10 @@
 
 # COMMAND ----------
 
+dbutils.fs.rm(orders_checkpoint_path,True)
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #5.A - Use Database</h2>
 # MAGIC 
 # MAGIC Each notebook uses a different Spark session and will initially use the **`default`** database.
@@ -84,6 +88,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -129,8 +134,42 @@ reality_check_05_a()
 
 # COMMAND ----------
 
-# TODO
+
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+json_df = spark.read.json(stream_path)
+schema_js= json_df.schema
+# display(json_df)
+# print(schema)
+json_sdf = spark.readStream.schema(schema_js).option("maxFilesPerTrigger", 1).json(stream_path)
+# json_sdf.isStreaming
+json_sdf = (json_sdf
+            .withColumn("ingested_at", current_timestamp())
+            .withColumn("ingest_file_name", input_file_name())
+            .withColumn("submittedAt" , col("submittedAt").cast('timestamp'))
+            .withColumn("submitted_yyyy_mm",date_format(col("submittedAt"), "yyyy-MM"))
+            .withColumnRenamed("customerId","customer_id")
+            .withColumnRenamed("salesRepId","sales_rep_id")
+            .withColumnRenamed("orderId","order_id")
+            .withColumnRenamed("submittedAt","submitted_at")
+            .drop(col("products"))
+            .withColumn("shipping_address_address", json_sdf.shippingAddress.address)
+            .withColumn("shipping_address_attention", json_sdf.shippingAddress.attention)
+            .withColumn("shipping_address_city", json_sdf.shippingAddress.city)
+            .withColumn("shipping_address_state", json_sdf.shippingAddress.state)
+            .withColumn("shipping_address_zip", json_sdf.shippingAddress.zip.cast('integer'))
+            .drop(col("shippingAddress"))
+           )
+
+(json_sdf
+ .writeStream
+ .outputMode("append")
+ .queryName(orders_table)
+ .option("mergeSchema", "true")
+ .option("checkpointLocation",orders_checkpoint_path)
+ .format("delta")
+ .toTable(orders_table))
 
 # COMMAND ----------
 
@@ -189,6 +228,34 @@ reality_check_05_b()
 
 # TODO
 # Use this cell to complete your solution
+json_df = spark.read.json(stream_path)
+schema_js= json_df.schema
+# display(json_df)
+# print(schema)
+json_sdf = spark.readStream.schema(schema_js).option("maxFilesPerTrigger", 1).json(stream_path)
+# json_sdf.isStreaming
+line_sdf=(json_sdf
+          .withColumn("ingested_at", current_timestamp())
+          .withColumn("ingest_file_name", input_file_name())
+          .drop("customerId","salesRepId","shippingAddress","submittedAt")
+          .withColumn("products",explode(json_sdf.products))
+          .withColumnRenamed("orderId","order_id")
+         )
+line_sdf=(line_sdf
+         .withColumn("product_id",line_sdf.products.productId)
+         .withColumn("product_quantity",line_sdf.products.quantity.cast('int'))
+         .withColumn("product_sold_price",line_sdf.products.soldPrice.cast('decimal(10,2)'))
+         .drop(col("products"))
+         )
+#line_sdf.printSchema()
+(line_sdf
+ .writeStream
+ .outputMode("append")
+ .queryName(line_items_table)
+ .option("mergeSchema", "true")
+ .option("checkpointLocation",line_items_checkpoint_path)
+ .format("delta")
+ .toTable(line_items_table))
 
 # COMMAND ----------
 
