@@ -7,6 +7,12 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC 
+# MAGIC drop view batched_orders;
+
+# COMMAND ----------
+
 # MAGIC %md 
 # MAGIC # Exercise #3 - Create Fact & Dim Tables
 # MAGIC 
@@ -245,43 +251,43 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col, date_format, coalesce
 
-order_table = sqlContext.table("batched_orders")
+spark.conf.set("spark.sql.adaptive.enabled",'false')
 
+# COMMAND ----------
+
+from pyspark.sql.functions import to_timestamp, from_unixtime, date_format
+
+order_table=spark.read.table("batched_orders")
 order_table = (order_table
-               .withColumn("submitted_at", (col("submitted_at") / 1e6).cast("Timestamp"))
-               .withColumn("shipping_address_zip", col("shipping_address_zip").cast("Integer"))
-)
+               .withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
+               .withColumn("shipping_address_zip", col("shipping_address_zip").cast("int"))
+              )
 
 drop_col = ("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "product_id", "product_quantity", "product_sold_price")
-drop_dub_cold = ("submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip")
 
-order_table = (order_table
-               .drop(*drop_col)
-               .dropDuplicates(drop_dub_cold)
-)
+order_table=order_table.drop(*drop_col)
 
-order_table = (order_table
-               .withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
-               
-)
+order_table=order_table.dropDuplicates(["order_id"])
 
+order_table=order_table.withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+
+order_table=order_table.repartition(36,"submitted_yyyy_mm")
 
 (order_table
  .write
  .format("delta")
- .partitionBy("submitted_yyyy_mm")
  .mode("overwrite")
- .saveAsTable("orders")
+ .partitionBy("submitted_yyyy_mm")
+ .saveAsTable(orders_table)
 )
 
-#order_table.printSchema()
+
+
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC DROP TABLE orders
+display(order_table.groupBy('submitted_yyyy_mm').count())
 
 # COMMAND ----------
 
@@ -326,8 +332,29 @@ reality_check_03_d()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col, date_format, coalesce
+
+order_table = sqlContext.table("batched_orders")
+
+drop_col = ("submitted_at", "customer_id", "sales_rep_id" ,"sales_rep_ssn" ,"sales_rep_first_name" ,"sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip")
+
+order_table = (order_table
+               .drop(*drop_col)
+              )
+
+
+order_table = (order_table
+               .withColumn("product_quantity", col("product_quantity").cast("Integer"))
+               .withColumn("product_sold_price", col("product_sold_price").cast("Decimal(10,2)"))
+              )
+
+(order_table
+ .write
+ .format("delta")
+ .mode("Overwrite")
+ .saveAsTable("line_items")
+)
+#order_table.printSchema()
 
 # COMMAND ----------
 

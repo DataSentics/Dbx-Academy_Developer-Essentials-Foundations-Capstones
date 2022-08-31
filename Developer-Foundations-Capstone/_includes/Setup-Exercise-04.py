@@ -176,3 +176,7 @@ def reality_check_04_final():
   if suite.passed and TestResultsAggregator.passed:
     daLogger.logCompletion(registration_id, username, 4)
 
+
+# COMMAND ----------
+
+print(spark.catalog.listTables(user_db))

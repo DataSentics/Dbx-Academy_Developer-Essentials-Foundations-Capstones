@@ -47,8 +47,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -78,8 +78,19 @@ reality_check_06_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col
+
+order_read = sqlContext.table("orders")
+
+order_read = (order_read
+              .groupBy("shipping_address_state")
+              .count()
+              .sort(col("count").desc())
+             )
+
+order_read.createOrReplaceTempView("question_1_results")
+
+#display(order_read)
 
 # COMMAND ----------
 
@@ -121,8 +132,18 @@ reality_check_06_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+order_read = sqlContext.table("orders")
+line_read = sqlContext.table("line_items")
+products_read = sqlContext.table("products")
+sales_read = sqlContext.table("sales_reps")
+
+
+
+order_read.join(line_read, "order_id", how="inner")
+order_read.join(products_read, "product_id", how="inner")
+order_read.join(sales_read, "sales_rep_id", how="inner")
+
+print(order_read.count())
 
 ex_avg = 0 # FILL_IN
 ex_min = 0 # FILL_IN

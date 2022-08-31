@@ -82,8 +82,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -129,8 +129,54 @@ reality_check_05_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df_json = (spark
+            .read
+            .json(stream_path)
+           )
+
+schema_table = df_json.schema
+
+df_json_stream = (spark
+                  .readStream
+                  .schema(schema_table)
+                  .option("maxFilesPerTrigger", 1)
+                  .json(stream_path)
+     )
+
+df_json_stream = (df_json_stream
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp())
+                  .withColumnRenamed("submittedAt","submitted_at")
+                  .withColumn("submitted_at", to_timestamp(col("submitted_at")))
+                  .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+                  .withColumnRenamed("customerId","customer_id")
+                  .withColumnRenamed("orderId","order_id")
+                  .withColumnRenamed("salesRepId","sales_rep_id")
+                  .withColumn("shipping_address_attention",df_json_stream.shippingAddress.attention)
+                  .withColumn("shipping_address_city",df_json_stream.shippingAddress.city)
+                  .withColumn("shipping_address_address",df_json_stream.shippingAddress.address)
+                  .withColumn("shipping_address_state",df_json_stream.shippingAddress.state)
+                  .withColumn("shipping_address_zip",df_json_stream.shippingAddress.address.cast("Integer"))
+                  .drop("shippingAddress")
+                  .drop("products")
+                 )
+df_json_stream = df_json_stream.withColumn("submitted_at",df_json_stream.submitted_at.cast("timestamp"))
+
+(df_json_stream
+ .writeStream
+ .outputMode("append")
+ .format("delta")
+ .queryName(orders_table)
+ .trigger(processingTime="1 second")
+ .option("checkpointLocation", orders_checkpoint_path)
+ .toTable(orders_table)
+)
+
+# COMMAND ----------
+
+display(df_json_stream)
 
 # COMMAND ----------
 
@@ -187,8 +233,46 @@ reality_check_05_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df_json = (spark
+            .read
+            .json(stream_path)
+           )
+
+schema_table = df_json.schema
+
+df_json_stream2 = (spark
+                  .readStream
+                  .schema(schema_table)
+                  .option("maxFilesPerTrigger", 1)
+                  .json(stream_path)
+     )
+
+df_json_stream2 = (df_json_stream2
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp())
+                  .drop("customerId","salesRepId","shippingAddress","submittedAt")
+                  .withColumn("products",explode(df_json_stream2.products))
+                 )
+
+df_json_stream2 = (df_json_stream2
+                  .withColumnRenamed("orderId","order_id")
+                  .withColumn("product_id",df_json_stream2.products.productId)
+                  .withColumn("product_quantity",df_json_stream2.products.quantity.cast('int'))
+                  .withColumn("product_sold_price",df_json_stream2.products.soldPrice.cast('decimal(10,2)'))
+                  .drop(col("products"))
+                  )
+
+(df_json_stream2
+ .writeStream
+ .outputMode("append")
+ .queryName(line_items_table)
+ .option("mergeSchema", "true")
+ .option("checkpointLocation",line_items_checkpoint_path)
+ .format("delta")
+ .toTable(line_items_table)
+)
 
 # COMMAND ----------
 

@@ -180,7 +180,7 @@ batch_2017 = (batch_2017
 
 (batch_2017
  .write
- .mode("overwrite")
+ .mode("Overwrite")
  .save(batch_target_path))
 
 
@@ -240,7 +240,7 @@ new_barch = new_barch.select([when(col(c)=="null",None).otherwise(col(c)).alias(
 (new_barch
  .write
  .format("delta")
- .mode("overwrite")
+ .mode("Overwrite")
  .save(batch_target_path))
 
 display(new_barch)
@@ -314,6 +314,7 @@ batch_2019 = (batch_2019
               .withColumnRenamed("productQuantity", "product_quantity")
               .withColumnRenamed("productSoldPrice", "product_sold_price")
              )
+
 newer_barch = batch_2019.unionAll(new_barch)
 
 newer_barch = newer_barch.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in newer_barch.columns])
@@ -321,7 +322,7 @@ newer_barch = newer_barch.select([when(col(c)=="null",None).otherwise(col(c)).al
 (newer_barch
  .write
  .format("delta")
- .mode("overwrite")
+ .mode("Overwrite")
  .save(batch_target_path))
 
 
@@ -344,6 +345,16 @@ reality_check_02_c()
 # COMMAND ----------
 
 reality_check_02_final()
+
+# COMMAND ----------
+
+asd = dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2017.txt
+
+qwe = dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2018.csv
+
+dbfs:/dbacademy/andrei-cosmin.tugmeanu@datasentics.com/developer-foundations-capstone/raw/orders/batch/2019.csv
+
+dbutils.fs.rm(batch_target_path, True)
 
 # COMMAND ----------
 

@@ -52,8 +52,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -113,14 +113,51 @@ reality_check_04_b()
 
 # COMMAND ----------
 
+products_table.printSchema()
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #4.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+# MAGIC %sql
+# MAGIC create table products_table;
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col, explode
+
+products_work = (spark
+                 .read
+                 .format("xml")
+                 .option("rootTag", "products")
+                 .option("rowTag", "product")
+                 .option("inferSchema",True)  
+                 .load(products_xml_path)
+                 )
+
+products_work = (products_work
+                    .withColumnRenamed("_product_id", "product_id")
+                    .withColumn("base_price", col("price._base_price"))
+                    .withColumn("color_adj", col("price._color_adj"))
+                    .withColumn("size_adj", col("price._size_adj"))
+                    .withColumn("price", col("price.usd"))
+                    .filter("price IS NOT NULL")
+                 )
+
+(products_work
+ .write
+ .format("delta")
+ .mode("overwrite")
+ .option("overwriteSchema", True)
+ .saveAsTable(products_table)
+)
+
+#products_table.printSchema()
+#display(products_table)
 
 # COMMAND ----------
 
@@ -148,3 +185,7 @@ reality_check_04_final()
 # MAGIC Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br/>
 # MAGIC <br/>
 # MAGIC <a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a> | <a href="http://help.databricks.com/">Support</a>
+
+# COMMAND ----------
+
+print(spark.catalog.listTables(user_db))
