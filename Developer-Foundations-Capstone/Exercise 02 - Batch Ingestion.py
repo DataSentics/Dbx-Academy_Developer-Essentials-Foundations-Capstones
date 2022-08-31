@@ -156,6 +156,7 @@ fixed_width_column_defs = {
 
 # TODO
 from pyspark.sql.functions import *
+dbutils.fs.rm(batch_target_path, True)
 # Use this cell to complete your solution
 dbutils.fs.head(batch_2017_path,96)
 
@@ -239,23 +240,24 @@ batch_2018_df = batch_2018_df.withColumn("ingest_file_name", input_file_name())
 batch_2018_df = batch_2018_df.withColumn("ingested_at", current_timestamp())
 
 #Read the path from batch_target_path with delta format
-batch_target_df = (spark
-       .read
-       .format("delta")
-       .load(batch_target_path)
-      )
+# batch_target_df = (spark
+#        .read
+#        .format("delta")
+#        .load(batch_target_path)
+#       )
 
-#Union the 2 dataframes toghether
-unionized_df = batch_2018_df.union(batch_target_df)
+# #Union the 2 dataframes toghether
+# unionized_df = batch_2018_df.union(batch_target_df)
 
 #replace string value "null" with SQL value null
-unionized_df = unionized_df.replace("null",None)
+batch_2018_df = batch_2018_df.replace("null",None)
 
 #Save and overwrite to batch_target_path
-unionized_df.write.format("delta").mode("overwrite").option("overwriteSchema",True).save(batch_target_path)
+batch_2018_df.write.format("delta").mode("append").save(batch_target_path)
 
 
-display(unionized_df)
+
+# display(batch_2018_df)
 
 # COMMAND ----------
 
@@ -338,10 +340,10 @@ df_2c=(spark
 
 
 
-df_target =(spark
-  .read
-  .format("delta")
-  .load(batch_target_path))
+# df_target =(spark
+#   .read
+#   .format("delta")
+#   .load(batch_target_path))
 
 
 
@@ -349,9 +351,9 @@ df_2c=df_2c.withColumn("ingest_file_name", input_file_name())
 df_2c=df_2c.withColumn("ingested_at", current_timestamp())
 for old, new in zip(df_2c.columns, fixed_width_column_defs.keys()):
     df_2c = df_2c.withColumnRenamed(old, new)
-result_df=df_2c.union(df_target)
-result_df=result_df.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in result_df.columns])
-result_df.write.format("delta").mode("overwrite").save(batch_target_path)
+# result_df=df_2c.union(df_target)
+df_2c= df_2c.replace("null",None)
+df_2c.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 

@@ -94,14 +94,20 @@ reality_check_03_a()
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DROP VIEW batch_temp_view;
+# MAGIC drop table batched_orders;
+
+# COMMAND ----------
+
 
 
 batched_orders = (spark
        .read
        .format("delta")
-       .load(batch_target_path)
+       .load(batch_source_path)
       )
-batch_target_df.createOrReplaceTempView("batch_temp_view")
+batched_orders.createOrReplaceTempView("batch_temp_view")
 spark.sql("cache table batched_orders AS select * from batch_temp_view")
 
 # COMMAND ----------
@@ -154,13 +160,14 @@ reality_check_03_b()
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # MAGIC %md ### Implement Exercise #3.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+# MAGIC %sql 
+# MAGIC drop table sales_reps
 
 # COMMAND ----------
 
@@ -185,7 +192,7 @@ df=df.drop("submitted_at", "order_id", "customer_id","shipping_address_attention
 df=df.dropDuplicates(["sales_rep_id","sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip"])
 
 df.write.format("delta").saveAsTable("sales_reps")
-display(df)
+
 
 # COMMAND ----------
 
@@ -240,18 +247,35 @@ reality_check_03_c()
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DROP TABLE orders
+
+# COMMAND ----------
+
+spark.conf.set("spark.sql.adaptive.enabled",'false')
+
+# COMMAND ----------
+
+spark.conf.get("spark.sql.adaptive.enabled")
+
+# COMMAND ----------
+
 from pyspark.sql.functions import *
 #import from view into dataframe
 df=sqlContext.table("batch_temp_view")
 df = (df
-      .withColumn("submitted_at",(col("submitted_at")/1e6).cast("timestamp"))
+      .withColumn("submitted_at",to_timestamp(from_unixtime(col("submitted_at"))))
       .withColumn("shipping_address_zip",df.shipping_address_zip.cast("Integer"))
       .drop("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip","product_id", "product_quantity", "product_sold_price")     .dropDuplicates(["submitted_at","order_id","customer_id","sales_rep_id","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state","shipping_address_zip"])
-      .withColumn("submitted_yyyy_mm",to_date("submitted_at","YYYY-MM").cast("String"))
+      .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
      )
-df.repartition(36)
-df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").partitionBy("submitted_yyyy_mm").saveAsTable("orders")
+df = df.repartition(36,"submitted_yyyy_mm")
+df.write.format("delta").mode("overwrite").partitionBy("submitted_yyyy_mm").saveAsTable("orders")
 display(df)
+
+# COMMAND ----------
+
+display(df.groupBy('submitted_yyyy_mm').count())
 
 # COMMAND ----------
 

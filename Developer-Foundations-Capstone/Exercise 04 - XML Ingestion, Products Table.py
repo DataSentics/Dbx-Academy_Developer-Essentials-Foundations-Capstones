@@ -54,6 +54,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -119,8 +120,29 @@ reality_check_04_b()
 
 # COMMAND ----------
 
+display(df.printSchema())
+
+# COMMAND ----------
+
 # TODO
-# Use this cell to complete your solution
+df = (spark
+       .read
+       .format("xml")
+       .option("rootTag","products")
+       .option("rowTag","product")
+       .option("inferSchema",True)
+       .load(products_xml_path)
+      )
+df = (df.withColumn("base_price",df.price._base_price)
+       .withColumn("color_adj",df.price._color_adj)
+       .withColumn("size_adj",df.price._size_adj)
+       .withColumn("price",df.price.usd)
+       .withColumnRenamed("_product_id","product_id")
+
+     )
+df = df.dropna()
+df.write.format("delta").mode("overwrite").option("overwriteSchema",True).saveAsTable("products")
+display(df)
 
 # COMMAND ----------
 

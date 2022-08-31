@@ -49,6 +49,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -78,8 +79,17 @@ reality_check_06_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+
+
+# COMMAND ----------
+
+df = spark.table(orders_table)
+df = (df
+      .groupBy("shipping_address_state")
+      .count()
+      .sort('count', ascending=False)
+      .createOrReplaceTempView(question_1_results_table)
+     )
 
 # COMMAND ----------
 
@@ -121,8 +131,41 @@ reality_check_06_b()
 
 # COMMAND ----------
 
+orders_df.printSchema()
+
+# COMMAND ----------
+
+line_items_df.printSchema()
+
+# COMMAND ----------
+
+products_df.printSchema()
+
+# COMMAND ----------
+
+sales_reps_df.printSchema()
+
+# COMMAND ----------
+
+display(join_orders_df)
+
+# COMMAND ----------
+
+print(join_orders_line_tems_products_sales_reps_df.count())
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+orders_df = spark.table(orders_table)
+line_items_df = spark.table(line_items_table)
+products_df = spark.table(line_items_table)
+sales_reps_df = spark.table(line_items_table)
+
+join_os_df=orders_df.join(sales_reps_df, "sales_rep_id", how="inner")
+join_lp_df=line_items_df.join(products_df, "product_id", how="inner")
+both_joins=join_os_df.join(join_lp_df, "order_id", how="inner")
+
 
 ex_avg = 0 # FILL_IN
 ex_min = 0 # FILL_IN
