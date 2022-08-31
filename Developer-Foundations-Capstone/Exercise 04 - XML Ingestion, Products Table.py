@@ -54,6 +54,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -121,6 +122,26 @@ reality_check_04_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+products_df = (spark
+       .read
+       .format("xml")
+       .option("rootTag" , "products")
+       .option("rowTag" , "product")
+       .option("inferSchema" , True)
+       .load(products_xml_path)
+      )
+products_df = (products_df
+              .withColumn("base_price", products_df.price._base_price.cast('double'))
+              .withColumn("color_adj", products_df.price._color_adj.cast('double'))
+              .withColumn("size_adj", products_df.price._size_adj.cast('double'))
+              .withColumn("price", products_df.price.usd.cast('double'))
+              .withColumnRenamed("_product_id","product_id")
+              )
+products_df = products_df.where(col("price").isNotNull())
+products_df.printSchema()
+spark.sql(f"drop table {products_table}")
+products_df.write.format("delta").saveAsTable(products_table)
 
 # COMMAND ----------
 
