@@ -82,8 +82,13 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
+
+
+# COMMAND ----------
+
+dbutils.fs.rm(orders_checkpoint_path,True)
+
 
 # COMMAND ----------
 
@@ -93,6 +98,12 @@
 # COMMAND ----------
 
 reality_check_05_a()
+
+# COMMAND ----------
+
+display(df_new.printSchema())
+
+
 
 # COMMAND ----------
 
@@ -129,8 +140,50 @@ reality_check_05_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import date_format
+df=spark.read.json(stream_path)
+schema = df.schema
+df_json=spark.readStream.schema(schema).option("maxFilesPerTrigger", 1).json(stream_path)
+
+df_json = df_json.drop("products")
+
+df_json=(df_json
+     .withColumn("ingest_file_name", input_file_name())
+     .withColumn("ingested_at",current_timestamp())
+     .withColumnRenamed("submittedAt","submitted_at")
+     .withColumn("submitted_yyyy_mm",date_format(col("submitted_at"), "yyyy-MM"))
+     .withColumnRenamed("customerId","customer_id")
+     .withColumnRenamed("orderId","order_id")
+     .withColumnRenamed("salesRepId","sales_rep_id")        
+     .withColumn("shipping_address_attention",df_json.shippingAddress.attention)
+     .withColumn("shipping_address_city",df_json.shippingAddress.city)
+     .withColumn("shipping_address_address",df_json.shippingAddress.address)       
+     .withColumn("shipping_address_state",df_json.shippingAddress.state)
+     .withColumn("shipping_address_zip",df_json.shippingAddress.address.cast("Integer"))
+     .drop("shippingAddress")
+)
+
+
+df_json = df_json.withColumn("submitted_at",df_json.submitted_at.cast("timestamp"))
+
+
+(df_json
+                 .writeStream
+                 .outputMode("append")
+                 .format("delta")
+                 .trigger(processingTime="1 second")
+                 .queryName(orders_table)
+                 .option("checkpointLocation", orders_checkpoint_path)
+                 .toTable(orders_table)
+                )
+display(df_json)
+
+
+
+
+# COMMAND ----------
+
+df_json.printSchema()
 
 # COMMAND ----------
 
@@ -140,6 +193,10 @@ reality_check_05_a()
 # MAGIC **Caution**: In the cell above, you will be appending to a Delta table and the final record count will be validated below. Should you restart the stream, you will inevitably append duplicate records to these tables forcing the validation to fail. There are two things you will need to address in this scenario:
 # MAGIC * Address the duplicate data issue by re-running **Exercise #3** which would presumably delete and/or overwrite the datasets, putting them back to their default state for this exercise.
 # MAGIC * Address the stream's state issue (remembering which files were processed) by deleting the directory identified by *`orders_checkpoint_path`*
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -187,8 +244,33 @@ reality_check_05_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_c=spark.read.json(stream_path)
+schema = df.schema
+df_c=spark.readStream.schema(schema).option("maxFilesPerTrigger", 1).json(stream_path)
+
+df_c=(df_c.withColumn("product",explode("products"))
+          .drop("shippingAddress","salesRepId","submittedAt","customerId","products")
+         
+          .withColumn("ingest_file_name", input_file_name())
+          .withColumn("ingested_at", current_timestamp())
+          .withColumnRenamed("orderId","order_id")
+)
+df_c=(df_c
+      .withColumn("product_id",df_c.product.productId)
+          .withColumn("product_quantity",df_c.product.quantity.cast("int"))
+          .withColumn("product_sold_price",df_c.product.soldPrice.cast("decimal(10,2)"))
+          .drop("product")
+     )
+
+(df_c
+     .writeStream
+     .outputMode("append")
+     .format("delta")
+     .trigger(processingTime="1 second")
+     .queryName(line_items_table)
+     .option("checkpointLocation",line_items_checkpoint_path)
+     .toTable(line_items_table)
+)
 
 # COMMAND ----------
 

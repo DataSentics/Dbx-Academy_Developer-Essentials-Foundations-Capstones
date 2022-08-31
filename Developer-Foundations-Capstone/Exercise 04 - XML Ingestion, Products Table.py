@@ -52,8 +52,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
+
 
 # COMMAND ----------
 
@@ -113,14 +113,46 @@ reality_check_04_b()
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #4.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col
+df = (spark.read 
+    .format("xml") 
+    .option("rootTag", "products") 
+    .option("rowTag", "product")
+    .option("inferSchema",True)  
+    .load(products_xml_path))
+
+df2=(df
+     .withColumn("color_adj", df.price._color_adj)
+     .withColumn("size_adj", df.price._size_adj)
+     .withColumn("base_price", df.price._base_price)
+     .withColumnRenamed("_product_id","product_id")
+     .withColumn("price",df.price.usd)
+     .filter("price IS NOT NULL")
+    )
+
+
+df2.write.format("delta").mode("overwrite").saveAsTable(f"{products_table}")
+
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+display(df)
 
 # COMMAND ----------
 

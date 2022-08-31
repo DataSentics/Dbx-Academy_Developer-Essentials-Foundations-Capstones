@@ -56,6 +56,10 @@
 
 # COMMAND ----------
 
+spark.sql(f"DROP DATABASE IF EXISTS {user_db} CASCADE;")
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #3.A
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
@@ -89,6 +93,15 @@ reality_check_03_a()
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC drop table batched_orders
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #3.B
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
@@ -100,8 +113,6 @@ df =(spark
   .format("delta")
   .load(batch_source_path))
 df.createOrReplaceTempView("batch_temp_view")
-#spark.sql("select order_id,customer_id from batch_temp_view").show()
-
 spark.sql("cache table batched_orders AS select * from batch_temp_view")
 
 # COMMAND ----------
@@ -185,6 +196,10 @@ reality_check_03_c()
 
 # COMMAND ----------
 
+spark.conf.set("spark.sql.adaptive.enabled",'false')
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #3.D - Extract Orders</h2>
 # MAGIC 
 # MAGIC Our batched orders from Exercise 02 contains one line per product meaning there are multiple records per order.
@@ -227,21 +242,26 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-from pyspark.sql.functions import to_timestamp
+from pyspark.sql.functions import to_timestamp,date_format,from_unixtime
 df3=sqlContext.table("batched_orders")
 df3=(df3
-     .withColumn("submitted_at", (col("submitted_at")/1e6).cast("timestamp") )
+
      .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
      )
 colsDrop = ("sales_rep_ssn", "sales_rep_first_name", "sales_rep_last_name", "sales_rep_address", "sales_rep_city", "sales_rep_state", "sales_rep_zip", "product_id", "product_quantity", "product_sold_price")
 df3=df3.drop(*colsDrop)
 df3=df3.dropDuplicates(["submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip"])
+df3=df3.withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
 df3=df3.withColumn("submitted_yyyy_mm",date_format("submitted_at","yyyy-MM"))
-df3=df3.repartition(36)
+df3=df3.repartition(36,"submitted_yyyy_mm")
 df3.write.partitionBy("submitted_yyyy_mm").format("delta").mode("overwrite").saveAsTable("orders")
 print(df3.rdd.getNumPartitions())
 
 display(df3)
+
+# COMMAND ----------
+
+display(df3.groupBy('submitted_yyyy_mm').count())
 
 # COMMAND ----------
 
@@ -286,8 +306,21 @@ reality_check_03_d()
 
 # COMMAND ----------
 
+from pyspark.sql.types import DecimalType
 # TODO
-# Use this cell to complete your solution
+#display(dbutils.fs.ls("dbfs:/dbacademy/alexandru.niteanu@datasentics.com/developer-foundations-capstone/batch_orders_dirty.delta/"))
+df_e=sqlContext.table("batched_orders")
+#display(df_e)
+colsDrop=("submitted_at","customer_id","sales_rep_id","sales_rep_ssn","sales_rep_first_name","sales_rep_last_name","sales_rep_address","sales_rep_city","sales_rep_state","sales_rep_zip","shipping_address_attention","shipping_address_address","shipping_address_city","shipping_address_state","shipping_address_zip")
+df_e=df_e.drop(*colsDrop)
+df_e=df_e.withColumn("product_quantity",col("product_quantity").cast("integer"))
+df_e=df_e.withColumn("product_sold_price",col("product_sold_price").cast(DecimalType(10,2)))
+df_e.write.format("delta").mode("overwrite").option("overwriteSchema",True).saveAsTable("line_items")
+
+
+# COMMAND ----------
+
+display(df_e)
 
 # COMMAND ----------
 

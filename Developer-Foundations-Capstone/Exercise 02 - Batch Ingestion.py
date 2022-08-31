@@ -42,6 +42,11 @@
 
 # COMMAND ----------
 
+dbutils.fs.rm(batch_target_path, True)
+
+
+# COMMAND ----------
+
 # MAGIC %md Run the following cell to preview a list of the files you will be processing in this exercise.
 
 # COMMAND ----------
@@ -224,9 +229,9 @@ df2 =(spark
 
 df_2b =df_2b.withColumn("ingest_file_name", input_file_name())
 df_2b=df_2b.withColumn("ingested_at", current_timestamp())
-bigDF2 = df2.union(df_2b)
-bigDF3=bigDF2.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in bigDF.columns])
-bigDF3.write.format("delta").mode("overwrite").save(batch_target_path)
+#bigDF2 = df2.union(df_2b)
+bigDF3=df_2b.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df_2b.columns])
+bigDF3.write.format("delta").mode("append").save(batch_target_path)
 
 
 # COMMAND ----------
@@ -281,9 +286,9 @@ df_2c=df_2c.withColumn("ingest_file_name", input_file_name())
 df_2c=df_2c.withColumn("ingested_at", current_timestamp())
 for old, new in zip(df_2c.columns, fixed_width_column_defs.keys()):
     df_2c = df_2c.withColumnRenamed(old, new)
-result_df=df_2c.union(df_target)
-result_df=result_df.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in result_df.columns])
-result_df.write.format("delta").mode("overwrite").save(batch_target_path)
+
+result_df=df_2c.select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df_2c.columns])
+result_df.write.format("delta").mode("append").save(batch_target_path)
 
 
 # COMMAND ----------
