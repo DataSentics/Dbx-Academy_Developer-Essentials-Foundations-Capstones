@@ -142,15 +142,21 @@ first = df1.join(df2, df1.order_id == df2.order_id)
 second = first.join(df3, first.product_id == df3.product_id)
 third = second.join(df4, second.sales_rep_id == df4.sales_rep_id)
 
+fourth = third #For next task
+
 third = third.filter((col("color") == "green") & (col("shipping_address_state") == "NC") & (col("_error_ssn_format") == True))
 
 final = third.agg(avg(col("product_sold_price")),min(col("product_sold_price")),max(col("product_sold_price")))
 final.createOrReplaceTempView(question_2_results_table)
+#
 display(final)
 
-ex_avg = 96.902253
-ex_min = 85.79
-ex_max = 113.43
+ex_avg = final.first()["avg(product_sold_price)"]
+print(ex_avg)
+ex_min = final.first()["min(product_sold_price)"]
+print(ex_min)
+ex_max = final.first()["max(product_sold_price)"]
+print(ex_max)
 
 # COMMAND ----------
 
@@ -196,6 +202,17 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 
 # TODO
 # Use this cell to complete your solution
+
+
+# fourth = (fourth.withColumn("profit", (col("product_sold_price") - col("price")) * col("product_quantity"))
+#         .groupBy(["sales_rep_first_name","sales_rep_last_name"])
+#         .agg(sum(col("profit"))))
+# fourth = (fourth.sort('sum(profit)', ascending=False)
+#         .limit(1))
+spark.sql(f"drop view if exists {question_3_results_table}")
+fourth.createOrReplaceTempView(question_3_results_table)
+
+display(fourth)
 
 # COMMAND ----------
 
