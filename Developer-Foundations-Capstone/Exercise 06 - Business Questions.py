@@ -81,7 +81,7 @@ reality_check_06_a()
 
 # TODO
 # Use this cell to complete your solution
-orders_df = spark.sql(f"SELECT * FROM {orders_table}")
+orders_df = spark.table(orders_table)
 orders_df_agg = (orders_df
                  .groupBy("shipping_address_state")
                  .count()
@@ -135,16 +135,35 @@ reality_check_06_b()
 
 # TODO
 # Use this cell to complete your solution
-orders_df = spark.sql(f"SELECT * FROM {orders_table}")
-products_df = spark.sql(f"SELECT * FROM {products_table}")
-line_items_df = spark.sql(f"SELECT * FROM {line_items_table}")
-sales_reps_df = spark.sql(f"SELECT * FROM {sales_reps_table}")
+from pyspark.sql.functions import col, avg, min, max
+orders_df = spark.table(orders_table)
+products_df = spark.table(products_table)
+line_items_df = spark.table(line_items_table)
+sales_reps_df = spark.table(sales_reps_table)
 
-orders_sales_reps_df =orders_df.join(sales_reps_df, how = "inner", on = "sales_rep_id")
+dfJoined = orders_df.join(sales_reps_df,"sales_rep_id").join(line_items_df ,"order_id").join(products_df,"product_id")
+dfJoined = (dfJoined
+            .filter(col("color")== "green")
+            .filter(col("shipping_address_state")=="NC")
+            .filter(col("_error_ssn_format")== 'True')
+             )
 
-ex_avg = 0 # FILL_IN
-ex_min = 0 # FILL_IN
-ex_max = 0 # FILL_IN
+# display(dfJoined)
+
+ex_min = ex_avg = dfJoined.agg(min("product_sold_price"))
+display(ex_min)
+ex_max =  ex_avg = dfJoined.agg(max("product_sold_price"))
+display(ex_max)
+ex_avg = dfJoined.agg(avg("product_sold_price"))
+display(ex_avg)
+join_agg=(ex_avg.join(ex_min,how="outer").join(ex_max,how="outer"))
+display(join_agg)
+join_agg.createOrReplaceTempView(question_2_results_table)
+
+ex_avg = ex_avg.collect()[0][0]
+ex_min = ex_min.collect()[0][0]
+ex_max = ex_max.collect()[0][0]
+
 
 # COMMAND ----------
 
@@ -190,6 +209,22 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 
 # TODO
 # Use this cell to complete your solution
+
+from pyspark.sql.functions import col,sum
+orders_df = spark.table(orders_table)
+products_df = spark.table(products_table)
+line_items_df = spark.table(line_items_table)
+sales_reps_df = spark.table(sales_reps_table)
+
+dfJoined = orders_df.join(sales_reps_df,"sales_rep_id").join(line_items_df ,"order_id").join(products_df,"product_id")
+
+dfJoined= (dfJoined
+          .withColumn("total_profit" , (col("product_sold_price") - col("price")) * col("product_quantity"))
+          .groupBy(["sales_rep_first_name","sales_rep_last_name"])
+          .agg(sum(col("total_profit")))
+          )
+df_sort = dfJoined.sort(col("sum(total_profit)") , ascending = False).limit(1)
+df_sort.createOrReplaceTempView(question_3_results_table)
 
 # COMMAND ----------
 
