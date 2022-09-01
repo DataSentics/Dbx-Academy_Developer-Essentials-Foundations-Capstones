@@ -132,22 +132,47 @@ reality_check_06_b()
 
 # COMMAND ----------
 
+from pyspark.sql.functions import min, max, mean
+
 order_read = sqlContext.table("orders")
 line_read = sqlContext.table("line_items")
 products_read = sqlContext.table("products")
 sales_read = sqlContext.table("sales_reps")
 
+df_joined = (order_read
+             .join(sales_read,"sales_rep_id")
+             .join(line_read,"order_id")
+             .join(products_read,"product_id")
+            )
+
+df_joined = (df_joined
+             .filter("color == 'green'")
+             .filter("shipping_address_state == 'NC'")
+             .filter("_error_ssn_format == 'true'")
+            )
 
 
-order_read.join(line_read, "order_id", how="inner")
-order_read.join(products_read, "product_id", how="inner")
-order_read.join(sales_read, "sales_rep_id", how="inner")
+ex_avg_df = df_joined.select(mean("product_sold_price"))  
+ex_min_df = df_joined.select(min("product_sold_price"))  
+ex_max_df = df_joined.select(max("product_sold_price"))  
 
-print(order_read.count())
+new_df = (ex_avg_df
+          .join(ex_min_df, how="outer")
+          .join(ex_max_df, how="outer")
+         )
 
-ex_avg = 0 # FILL_IN
-ex_min = 0 # FILL_IN
-ex_max = 0 # FILL_IN
+new_df.createOrReplaceTempView("question_2_results")
+
+ex_avg = ex_avg_df.collect()[0][0]
+ex_min = ex_min_df.collect()[0][0]
+ex_max = ex_max_df.collect()[0][0]
+
+print(ex_avg)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM question_2_results;
 
 # COMMAND ----------
 
@@ -191,8 +216,31 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col, sum
+
+order_read = sqlContext.table("orders")
+line_read = sqlContext.table("line_items")
+products_read = sqlContext.table("products")
+sales_read = sqlContext.table("sales_reps")
+
+df_joined = (order_read
+             .join(sales_read,"sales_rep_id")
+             .join(line_read,"order_id")
+             .join(products_read,"product_id")
+            )
+
+profit_data = (df_joined
+               .withColumn("total_profit", (col("product_sold_price") - col("price")) * col("product_quantity"))
+               .groupBy(["sales_rep_first_name", "sales_rep_last_name"])
+               .agg(sum(col("total_profit")))
+               .sort("sum(total_profit)", ascending=False)
+               .limit(1)
+              )
+
+profit_data.createOrReplaceTempView("question_3_results")
+
+#display(profit_data)
+#profit_data.printSchema()
 
 # COMMAND ----------
 
