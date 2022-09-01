@@ -143,8 +143,6 @@ df_line_items = sqlContext.table(f"{line_items_table}")
 df_products = sqlContext.table(f"{products_table}")
 df_sales_reps = sqlContext.table(f"{sales_reps_table}")
 
-# df_sales_reps = (df_sales_reps
-#                 .drop("ingest_file_name","ingested_at"))
 
 df_join1 = df_orders.join(df_sales_reps, "sales_rep_id")
 df_join2 = df_line_items.join(df_products, "product_id")
@@ -159,15 +157,18 @@ df_final = (df_joined_all
              .where("_error_ssn_format = True")
             )
 
-df_avgs = (df_final
-          .agg(min(col("product_sold_price")))
-          .agg(avg(col(df_final.product_sold_price)))
-          .agg(max(col(df_finalproduct_sold_price)))
-          
-          )
 
 
-display(df_result)
+df_values = df_final.agg(min("product_sold_price"), avg("product_sold_price"), max("product_sold_price"))
+
+display(df_values)
+
+ex_min = df_values.collect()[0][0]
+ex_avg = df_values.collect()[0][1]
+ex_max = df_values.collect()[0][2]
+print(f"min:{ex_min}, avg = {ex_avg}, max = {ex_max}")
+
+df_values.createOrReplaceTempView(f"{question_2_results_table}")
 
 
 
@@ -214,8 +215,34 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+
+df_orders = sqlContext.table(f"{orders_table}")
+df_line_items = sqlContext.table(f"{line_items_table}")
+df_products = sqlContext.table(f"{products_table}")
+df_sales_reps = sqlContext.table(f"{sales_reps_table}")
+
+
+df_join1 = df_orders.join(df_sales_reps, "sales_rep_id")
+df_join2 = df_line_items.join(df_products, "product_id")
+df_joined_all = df_join1.join(df_join2, "order_id")
+
+df_joined_all = df_joined_all.drop("ingest_file_name","ingested_at")
+
+
+df_joined_all = (df_joined_all
+                 .withColumn("total_profit", (col("product_sold_price") - col("price")) * col("product_quantity"))
+                 .groupBy("sales_rep_first_name", "sales_rep_last_name")
+                 .agg(sum("total_profit"))
+                 .sort("sum(total_profit)", ascending = False)
+                )
+
+df_final = df_joined_all.select("*").where("sales_rep_first_name = 'River'")
+
+
+display(df_final)
+
+df_final.createOrReplaceTempView(f"{question_3_results_table}")
 
 # COMMAND ----------
 
