@@ -88,6 +88,7 @@ spark.sql(f"USE {user_db}")
 # COMMAND ----------
 
 dbutils.fs.rm(orders_checkpoint_path,True)
+dbutils.fs.rm(line_items_checkpoint_path,True)
 
 
 # COMMAND ----------
