@@ -50,6 +50,11 @@
 
 # COMMAND ----------
 
+spark.sql(f"DROP DATABASE IF EXISTS {user_db} CASCADE;")
+display(spark.sql(f"SHOW SCHEMAS;"))
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #3.A - Create &amp; Use Database</h2>
 # MAGIC 
 # MAGIC By using a specific database, we can avoid contention to commonly named tables that may be in use by other users of the workspace.
