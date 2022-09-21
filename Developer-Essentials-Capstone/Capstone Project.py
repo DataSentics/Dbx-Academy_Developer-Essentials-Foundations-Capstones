@@ -174,16 +174,17 @@ gamingEventDF = (spark
 from pyspark.sql.functions import col, to_date
 
 def writeToBronze(sourceDataframe, bronzePath, streamName):
-  (sourceDataframe
-    .withColumn(FILL_IN)
-    .filter(col(FILL_IN)
+    (sourceDataframe
+    .withColumn('eventDate',to_date(col("eventParams.client_event_time"),"MM-dd-yyyy"))
+    .filter(col("eventDate").isNotNull())
             
-    FILL_IN
-            
+    .writeStream
+     
+    .format('delta')        
     .option("checkpointLocation", f"{bronzePath}_checkpoint")
     .queryName(streamName)
     .outputMode("append") 
-    .start(outputPathBronze)
+    .start(bronzePath)
   )
 
 # COMMAND ----------
@@ -227,9 +228,15 @@ realityCheckBronze(writeToBronze)
 print(lookupSourcePath)
 
 def loadStaticData(path):
-  return FILL_IN
+    deviceLookupDF = (spark
+                      .read
+                      .format('delta')
+                      .load(path)
+                      .filter("deviceType == 'ios' OR deviceType == 'android'")
+                     )
+    return deviceLookupDF
 
-deviceLookupDF = FILL_IN
+deviceLookupDF = loadStaticData(lookupSourcePath)
 
 # COMMAND ----------
 
@@ -275,16 +282,23 @@ realityCheckStatic(loadStaticData)
 from pyspark.sql.functions import col
 
 def bronzeToSilver(bronzePath, silverPath, streamName, lookupDF):
-  (spark.readStream
+    (spark.readStream
     .format("delta")
     .load(bronzePath)
-
-    FILL_IN
-
+   
+ 
+    .withColumn("device_id", col("eventParams.device_id"))
+    .withColumn("client_event_time", col("eventParams.client_event_time"))
+    .join(deviceLookupDF, ["device_id"])
+    .drop("eventParams")
+    .select("device_id","eventName","client_event_time","eventDate","deviceType")
+     
     .writeStream 
-
-    FILL_IN
-
+   
+    .format("delta")
+    .option("checkpointLocation", f"{silverPath}_checkpoint")
+    .queryName(streamName)
+    .outputMode("append")
     .start(silverPath))
 
 # COMMAND ----------
@@ -328,10 +342,26 @@ realityCheckSilver(bronzeToSilver)
 
 # TODO
 
-from pyspark.sql.functions import weekofyear
+from pyspark.sql.functions import weekofyear, approx_count_distinct
 
 def silverToGold(silverPath, goldPath, queryName):
-  FILL_IN
+    df = (spark.readStream
+    .format("delta")
+    .load(silverPath)
+    .withColumn("week",weekofyear("eventDate")) 
+    .groupBy("week")
+    .agg(approx_count_distinct(col("device_id"),rsd=.01).alias("WAU"))
+    
+                             
+    .writeStream 
+    .format("delta")
+    .option("checkpointLocation", f"{goldPath}_checkpoint")
+    .queryName(queryName)
+    .outputMode("complete")
+    .start(goldPath)
+                            )
+    return df
+    
 
 # COMMAND ----------
 
@@ -376,8 +406,8 @@ realityCheckGold(silverToGold)
 
 # TODO
 spark.sql("""
-   CREATE TABLE IF NOT EXISTS mobile_events_delta_gold
-   FILL_IN
+   CREATE TABLE IF NOT EXISTS mobile_events_delta_gold 
+   SELECT * FROM delta.`{}`
   """.format(outputPathGold))
 
 # COMMAND ----------
@@ -398,13 +428,6 @@ spark.sql("""
 # MAGIC <img src="https://s3-us-west-2.amazonaws.com/files.training.databricks.com/images/eLearning/Delta/plot-options-bar.png"/>
 # MAGIC 
 # MAGIC <img src="https://files.training.databricks.com/images/icon_warn_24.png"/> order by `week` to seek time-based patterns.
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC -- TODO
-# MAGIC 
-# MAGIC FILL_IN
 
 # COMMAND ----------
 
