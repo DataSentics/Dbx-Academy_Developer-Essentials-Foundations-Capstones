@@ -148,6 +148,62 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
+df_2017_bronze = df_2017.select(
+    df_2017.value.substr(1, 15).alias('submitted_at'),
+    df_2017.value.substr(16, 40).alias('order_id'),
+    df_2017.value.substr(56, 40).alias('customer_id'),
+    df_2017.value.substr(96, 40).alias('sales_rep_id'),
+    df_2017.value.substr(136,15).alias('sales_rep_ssn'),
+    df_2017.value.substr(151,15).alias('sales_rep_first_name'),
+    df_2017.value.substr(166,15).alias('sales_rep_last_name'),
+    df_2017.value.substr(181,40).alias('sales_rep_address'),
+    df_2017.value.substr(221,20).alias('sales_rep_city'),
+    df_2017.value.substr(241,2).alias('sales_rep_state'),
+    df_2017.value.substr(243,5).alias('sales_rep_zip'),
+    df_2017.value.substr(248,30).alias('shipping_address_attention'),
+    df_2017.value.substr(278,40).alias('shipping_address_address'),
+    df_2017.value.substr(318,20).alias('shipping_address_city'),
+    df_2017.value.substr(338,2).alias('shipping_address_state'),
+    df_2017.value.substr(340,5).alias('shipping_address_zip'),
+    df_2017.value.substr(345,40).alias('product_id'),
+    df_2017.value.substr(385,5).alias('product_quantity'),
+    df_2017.value.substr(390,20).alias('product_sold_price')
+)
+
+# COMMAND ----------
+
+display(df_2017_bronze)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
+df_2017_silver = df_2017_bronze.select([ltrim(col(i)).alias(i) for i in df_2017_bronze.columns])
+
+# COMMAND ----------
+
+for i in df_2017_silver.columns:
+    df_2017_silver = df_2017_silver.withColumn(i, when(col(i) == '', None).otherwise(col(i)))
+
+# COMMAND ----------
+
+df_2017_silver = (df_2017_silver
+                 .withColumn('ingest_file_name', input_file_name())
+                 .withColumn('ingested_at', current_timestamp())
+                 )
+
+# COMMAND ----------
+
+df_2017_silver = df_2017_silver.drop('value')
+
+# COMMAND ----------
+
+display(df_2017_silver)
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #2.A
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
@@ -155,7 +211,8 @@ fixed_width_column_defs = {
 # COMMAND ----------
 
 # TODO
-# Use this cell to complete your solution
+df_2017 = spark.read.text(batch_2017_path)
+display(df_2017)
 
 # COMMAND ----------
 
