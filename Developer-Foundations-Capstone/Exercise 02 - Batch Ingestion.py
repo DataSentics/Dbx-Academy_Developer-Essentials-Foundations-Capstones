@@ -148,6 +148,12 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
+# TODO
+df_2017 = spark.read.text(batch_2017_path)
+display(df_2017)
+
+# COMMAND ----------
+
 df_2017_bronze = df_2017.select(
     df_2017.value.substr(1, 15).alias('submitted_at'),
     df_2017.value.substr(16, 40).alias('order_id'),
@@ -200,19 +206,21 @@ df_2017_silver = df_2017_silver.drop('value')
 
 # COMMAND ----------
 
+df_2017_silver.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
 display(df_2017_silver)
+
+# COMMAND ----------
+
+dbutils.fs.ls(batch_target_path)
 
 # COMMAND ----------
 
 # MAGIC %md ### Implement Exercise #2.A
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
-
-# COMMAND ----------
-
-# TODO
-df_2017 = spark.read.text(batch_2017_path)
-display(df_2017)
 
 # COMMAND ----------
 
@@ -242,6 +250,75 @@ reality_check_02_a()
 # MAGIC %md ### Implement Exercise #2.b
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+dbutils.fs.head(batch_2018_path)
+
+# COMMAND ----------
+
+from pyspark.sql import types as t
+
+# COMMAND ----------
+
+
+
+df_2018_schema = t.StructType([ 
+  t.StructField("submitted_at", t.StringType(), True),
+  t.StructField("order_id", t.StringType(), True),
+  t.StructField("customer_id", t.StringType(), True),
+  t.StructField("sales_rep_id", t.StringType(), True),
+  t.StructField("sales_rep_ssn", t.StringType(), True),
+  t.StructField("sales_rep_first_name", t.StringType(), True),
+  t.StructField("sales_rep_last_name", t.StringType(), True),
+  t.StructField("sales_rep_address", t.StringType(), True),
+  t.StructField("sales_rep_city", t.StringType(), True),
+  t.StructField("sales_rep_state", t.StringType(), True),
+  t.StructField("sales_rep_zip", t.StringType(), True),
+  t.StructField("shipping_address_attention", t.StringType(), True),
+  t.StructField("shipping_address_address", t.StringType(), True),
+  t.StructField("shipping_address_city", t.StringType(), True),
+  t.StructField("shipping_address_state", t.StringType(), True),
+  t.StructField("shipping_address_zip", t.StringType(), True),
+  t.StructField("product_id", t.StringType(), True),
+  t.StructField("product_quantity", t.StringType(), True),
+  t.StructField("product_sold_price", t.StringType(), True)
+              ])
+
+# COMMAND ----------
+
+df_2018_bronze = (spark
+                 .read
+                 .format('csv')
+                 .option('header', 'true')
+                 .option('delimiter', '\t')
+                 .schema(df_2018_schema)
+                 .load(batch_2018_path)
+                 )
+
+# COMMAND ----------
+
+display(df_2018_bronze)
+
+# COMMAND ----------
+
+df_2018_bronze = (df_2018_bronze
+                 .withColumn('ingest_file_name', input_file_name())
+                 .withColumn('ingested_at', current_timestamp())
+                 )
+
+# COMMAND ----------
+
+for i in df_2018_bronze.columns:
+    df_2018_silver = df_2018_silver.withColumn(i, when(col(i) == 'null', None).otherwise(col(i)))
+
+# COMMAND ----------
+
+display(df_2018_silver)
+
+# COMMAND ----------
+
+df_2018_silver.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
@@ -281,6 +358,42 @@ reality_check_02_b()
 # MAGIC %md ### Implement Exercise #2.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+dbutils.fs.head(batch_2019_path)
+
+# COMMAND ----------
+
+df_2019_bronze = (spark
+                 .read
+                 .format('csv')
+                 .option('header', 'true')
+                 .option('delimiter', ',')
+                 .schema(df_2018_schema)
+                 .load(batch_2019_path)
+                 )
+
+# COMMAND ----------
+
+df_2019_bronze = (df_2019_bronze
+                 .withColumn('ingest_file_name', input_file_name())
+                 .withColumn('ingested_at', current_timestamp())
+                 )
+
+# COMMAND ----------
+
+display(df_2019_bronze)
+
+# COMMAND ----------
+
+# df_2019_silver = df_2018_bronze
+for i in df_2019_bronze.columns:
+    df_2019_silver = df_2019_silver.withColumn(i, when(col(i) == 'null', None).otherwise(col(i)))
+
+# COMMAND ----------
+
+df_2019_silver.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
