@@ -156,6 +156,60 @@ fixed_width_column_defs = {
 
 # TODO
 # Use this cell to complete your solution
+# dbutils.fs.ls(batch_2017_path)
+df_2017_ingested = spark.read.option('header', True).text(batch_2017_path)
+
+# COMMAND ----------
+
+df_2017_bronze = df_2017_ingested.select(
+    df_2017_ingested.value.substr(1,15).alias("submitted_at"),
+    df_2017_ingested.value.substr(16, 40).alias("order_id"),
+    df_2017_ingested.value.substr(56, 40).alias("customer_id"),
+    df_2017_ingested.value.substr(96, 40).alias("sales_rep_id"),
+    df_2017_ingested.value.substr(136, 15).alias("sales_rep_ssn"),
+    df_2017_ingested.value.substr(151, 15).alias("sales_rep_first_name"),
+    df_2017_ingested.value.substr(166, 15).alias("sales_rep_last_name"),
+    df_2017_ingested.value.substr(181, 40).alias("sales_rep_address"),
+    df_2017_ingested.value.substr(221, 20).alias("sales_rep_city"),
+    df_2017_ingested.value.substr(241, 2).alias("sales_rep_state"),
+    df_2017_ingested.value.substr(243, 5).alias("sales_rep_zip"),
+    df_2017_ingested.value.substr(248, 30).alias("shipping_address_attention"),
+    df_2017_ingested.value.substr(278, 40).alias("shipping_address_address"),
+    df_2017_ingested.value.substr(318, 20).alias("shipping_address_city"),
+    df_2017_ingested.value.substr(338, 2).alias("shipping_address_state"),
+    df_2017_ingested.value.substr(340, 5).alias("shipping_address_zip"),
+    df_2017_ingested.value.substr(345, 40).alias("product_id"),
+    df_2017_ingested.value.substr(385, 5).alias("product_quantity"),
+    df_2017_ingested.value.substr(390, 20).alias("product_sold_price")
+)
+
+# COMMAND ----------
+
+display(df_2017_bronze)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+df_2017_silver = (df_2017_bronze
+                  .select([ltrim(col(c)).alias(c) for c in df_2017_bronze.columns])
+                  .select([when(col(c)=="",None).otherwise(col(c)).alias(c) for c in df_2017_bronze.columns])
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp())                
+                 )
+                                   
+
+# COMMAND ----------
+
+display(df_2017_silver)
+
+# COMMAND ----------
+
+df_2017_silver.write.format("delta").mode("overwrite").save(batch_target_path)
+
+# COMMAND ----------
+
+# print(spark.sparkContext.defaultParallelism)
+# display(dbutils.fs.ls(batch_target_path))
 
 # COMMAND ----------
 
@@ -190,6 +244,33 @@ reality_check_02_a()
 
 # TODO
 # Use this cell to complete your solution
+df_2018_bronze = (spark
+                  .read
+                  .option("sep", "\t")
+                  .option("header", True)
+                  .csv(batch_2018_path) 
+                 )
+
+# COMMAND ----------
+
+df_2018_silver = (df_2018_bronze
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp()) 
+                 )
+
+# COMMAND ----------
+
+display(df_2018_silver)
+
+# COMMAND ----------
+
+df_2018_silver.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
+# print(spark.sparkContext.defaultParallelism)
+# display(dbutils.fs.ls(batch_target_path))
+# dbutils.fs.rm(batch_target_path, True)
 
 # COMMAND ----------
 
