@@ -127,7 +127,7 @@
 # MAGIC %md ### Setup - Create A Cluster
 # MAGIC 
 # MAGIC **Important note: In DataSentics Academy dev (standard SKU) workspace, there is a preconfigured cluster called `Capstone Foundations`. Please use this cluster instead of creating your own = skip the instruction below!**
-# MAGIC
+# MAGIC 
 # MAGIC #### Databricks Community Edition
 # MAGIC 
 # MAGIC This Capstone project was designed to work with Databricks Runtime Version (DBR) 9.1 LTS and the Databricks Community Edition's (CE) default cluster configuration. 
@@ -169,6 +169,10 @@
 # by setting reinstall=True. These datasets will not be automtically 
 # reinstalled when this notebook is re-ran so as to save you time.
 install_datasets(reinstall=False)
+
+# COMMAND ----------
+
+display(dbutils.fs.ls("dbfs:/dbacademy/alexandru.checiches@datasentics.com/developer-foundations-capstone/raw/"))
 
 # COMMAND ----------
 

@@ -154,8 +154,96 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
+# print(batch_2017_path)
+dbutils.fs.head(batch_2017_path)
+
+# COMMAND ----------
+
+#libs
+from pyspark.sql import functions as SF
+from pyspark.sql import types as T
+
+# COMMAND ----------
+
+#ingesting raw text file
+
+batch_2017_df_raw = spark.read.text(batch_2017_path)
+# display(batch_2017_df_raw)
+# batch_2017_df_raw.describe()
+
+# COMMAND ----------
+
+# hardcoding the conversion with the provided schema
+bronze_2017_df = (batch_2017_df_raw
+                .select(
+                    SF.substring(batch_2017_df_raw.value, 1, 15).alias("submitted_at"),
+                    SF.substring(batch_2017_df_raw.value, 16, 40).alias("order_id"),
+                    SF.substring(batch_2017_df_raw.value, 56, 40).alias("customer_id"),
+                    SF.substring(batch_2017_df_raw.value, 96, 40).alias("sales_rep_id"),
+                    SF.substring(batch_2017_df_raw.value, 136, 15).alias("sales_rep_ssn"),
+                    SF.substring(batch_2017_df_raw.value, 151, 15).alias("sales_rep_first_name"),
+                    SF.substring(batch_2017_df_raw.value, 166, 15).alias("sales_rep_last_name"),
+                    SF.substring(batch_2017_df_raw.value, 181, 40).alias("sales_rep_address"),
+                    SF.substring(batch_2017_df_raw.value, 221, 20).alias("sales_rep_city"),
+                    SF.substring(batch_2017_df_raw.value, 241, 2).alias("sales_rep_state"),
+                    SF.substring(batch_2017_df_raw.value, 243, 5).alias("sales_rep_zip"),
+                    SF.substring(batch_2017_df_raw.value, 248, 30).alias("shipping_address_attention"),
+                    SF.substring(batch_2017_df_raw.value, 278, 40).alias("shipping_address_address"),
+                    SF.substring(batch_2017_df_raw.value, 318, 20).alias("shipping_address_city"),
+                    SF.substring(batch_2017_df_raw.value, 338, 2).alias("shipping_address_state"),
+                    SF.substring(batch_2017_df_raw.value, 340, 5).alias("shipping_address_zip"),
+                    SF.substring(batch_2017_df_raw.value, 345, 40).alias("product_id"),
+                    SF.substring(batch_2017_df_raw.value, 385, 5).alias("product_quantity"),
+                    SF.substring(batch_2017_df_raw.value, 390, 20).alias("product_sold_price")
+                )
+                )
+# display(batch_2017_df)
+# batch_2017_df.describe()
+# batch_2017_df.count()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC `would appreciate learning about a programatical approach for the above ingestion process`
+
+# COMMAND ----------
+
+# clearing leading whitespaces
+
+silver_2017_df_temp = (bronze_2017_df.select([SF.ltrim(SF.col(c)).alias(c) for c in bronze_2017_df.columns]))
+
+# COMMAND ----------
+
+silver_2017_df_temp = (silver_2017_df_temp
+                  .withColumn("ingest_file_name", SF.input_file_name())
+                  .withColumn("ingested_at", SF.current_timestamp())
+                 )
+# display(silver_2017_df_temp)
+# silver_2017_df_temp.count()
+
+# COMMAND ----------
+
+# replacing empty strings with null
+
+silver_2017_df_temp = silver_2017_df_temp.select([SF.when(SF.col(c)=="",None).otherwise(SF.col(c)).alias(c) for c in silver_2017_df_temp.columns])
+# display(silver_2017_df_temp)
+
+# COMMAND ----------
+
+silver_2017_df_temp.printSchema()
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+dbutils.fs.rm(batch_target_path, True)
+silver_2017_df_temp.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
+# quick check on number of slots and partitions
+print(spark.sparkContext.defaultParallelism)
+display(dbutils.fs.ls(batch_target_path))
 
 # COMMAND ----------
 
@@ -185,6 +273,92 @@ reality_check_02_a()
 # MAGIC %md ### Implement Exercise #2.b
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+# dbutils.fs.head(batch_2018_path)
+
+# COMMAND ----------
+
+udf_schema = T.StructType([
+    T.StructField("submitted_at", T.StringType(), True),
+    T.StructField("order_id", T.StringType(), True),
+    T.StructField("customer_id", T.StringType(), True),
+    T.StructField("sales_rep_id", T.StringType(), True),
+    T.StructField("sales_rep_ssn", T.StringType(), True),
+    T.StructField("sales_rep_first_name", T.StringType(), True),
+    T.StructField("sales_rep_last_name", T.StringType(), True),
+    T.StructField("sales_rep_address", T.StringType(), True),
+    T.StructField("sales_rep_city", T.StringType(), True),
+    T.StructField("sales_rep_state", T.StringType(), True),
+    T.StructField("sales_rep_zip", T.StringType(), True),
+    T.StructField("shipping_address_attention", T.StringType(), True),
+    T.StructField("shipping_address_address", T.StringType(), True),
+    T.StructField("shipping_address_city", T.StringType(), True),
+    T.StructField("shipping_address_state", T.StringType(), True),
+    T.StructField("shipping_address_zip", T.StringType(), True),
+    T.StructField("product_id", T.StringType(), True),
+    T.StructField("product_quantity", T.StringType(), True),
+    T.StructField("product_sold_price", T.StringType(), True)    
+])
+
+bronze_2018_df = (spark
+                 .read
+                 .option("sep", "\t")
+                 .option("header", True)
+                 .schema(udf_schema)
+                 .csv(batch_2018_path)
+                 )
+# display(bronze_2018_df)
+
+# COMMAND ----------
+
+bronze_2018_df.printSchema()
+
+# COMMAND ----------
+
+bronze_2018_df = (bronze_2018_df
+                  .withColumn("ingest_file_name", SF.input_file_name())
+                  .withColumn("ingested_at", SF.current_timestamp())
+                 )
+# display(bronze_2018_df)
+
+# COMMAND ----------
+
+bronze_2018_df.count()
+bronze_2018_df.printSchema()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC `i would like to change the nullable option for the last 2 generated columns but i am not able to do this without recreating the df`
+
+# COMMAND ----------
+
+# null_check_df = (bronze_2018_df
+#                  .filter(SF.col("sales_rep_ssn") == "null")
+#                 )
+# display(null_check_df)
+
+# COMMAND ----------
+
+silver_2018_df_temp = bronze_2018_df.select([SF.when(SF.col(c)=="null",None).otherwise(SF.col(c)).alias(c) for c in bronze_2018_df.columns])
+# display(silver_2018_df_temp)
+
+# COMMAND ----------
+
+# null_check_df2 = (silver_2018_df_temp
+#                  .filter(SF.col("sales_rep_ssn") == "null")
+#                 )
+# display(null_check_df2)
+
+# COMMAND ----------
+
+silver_2018_df_temp.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
+display(dbutils.fs.ls(batch_target_path))
 
 # COMMAND ----------
 
@@ -224,6 +398,69 @@ reality_check_02_b()
 # MAGIC %md ### Implement Exercise #2.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+dbutils.fs.head(batch_2019_path)
+
+# COMMAND ----------
+
+bronze_2019_df = (spark
+                 .read
+                 .option("sep", ",")
+                 .option("header", True)
+                 .schema(udf_schema)
+                 .csv(batch_2019_path)
+                 )
+# display(bronze_2019_df)
+
+# COMMAND ----------
+
+bronze_2019_df = (bronze_2019_df
+                  .withColumn("ingest_file_name", SF.input_file_name())
+                  .withColumn("ingested_at", SF.current_timestamp())
+                 )
+
+# COMMAND ----------
+
+silver_2019_df_temp = bronze_2019_df.select([SF.when(SF.col(c)=="null",None).otherwise(SF.col(c)).alias(c) for c in bronze_2019_df.columns])
+# display(silver_2019_df_temp)
+
+# COMMAND ----------
+
+# null_check_df3 = (silver_2019_df_temp
+#                  .filter(SF.col("sales_rep_ssn") == "null")
+#                 )
+# display(null_check_df3)
+
+# COMMAND ----------
+
+silver_2019_df_temp.printSchema()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC `it is curious that the preceding dataframe had the last 2 columns with nullable = true, different than the previous df from which I took the schema`
+
+# COMMAND ----------
+
+silver_2019_df_temp.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
+# display(dbutils.fs.ls(batch_target_path))
+
+# COMMAND ----------
+
+# %sql
+# create table delta_test_table
+# using delta
+# location 'dbfs:/dbacademy/alexandru.checiches@datasentics.com/developer-foundations-capstone/batch_orders_dirty.delta'
+
+# COMMAND ----------
+
+# %sql
+# select count(*) from delta_test_table
 
 # COMMAND ----------
 
