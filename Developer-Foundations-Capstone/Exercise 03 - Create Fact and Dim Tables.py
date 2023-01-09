@@ -64,6 +64,8 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -100,6 +102,18 @@ reality_check_03_a()
 
 # MAGIC %md ### Reality Check #3.B
 # MAGIC Run the following command to ensure that you are on track:
+
+# COMMAND ----------
+
+df = spark.read.format('delta').load(batch_source_path)
+
+# COMMAND ----------
+
+df.createOrReplaceTempView(batch_temp_view)
+
+# COMMAND ----------
+
+df.cache()
 
 # COMMAND ----------
 
@@ -152,8 +166,46 @@ reality_check_03_b()
 
 # COMMAND ----------
 
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+df_2 = spark.read.table(batch_temp_view)
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+df_2 = df_2.withColumn('_error_ssn_format', when(col("sales_rep_ssn").like("%-%"), True).otherwise(False))
+
+# COMMAND ----------
+
+from pyspark.sql.types import *
+
+# COMMAND ----------
+
+df_2 = df_2.withColumn("sales_rep_ssn", df_2["sales_rep_ssn"].cast(LongType()))
+df_2 = df_2.withColumn("sales_rep_zip", df_2["sales_rep_zip"].cast(IntegerType()))
+
+# COMMAND ----------
+
+df_2 = df_2.drop('submitted_at', 'order_id', 'customer_id', 'shipping_address_attention', 'shipping_address_address', 'shipping_address_city', 'shipping_address_state', 'shipping_address_zip', 'product_id', 'product_quantity', 'product_sold_price')
+
+# COMMAND ----------
+
+df_2 = df_2.dropDuplicates(['sales_rep_id', 'sales_rep_ssn'])
+
+# COMMAND ----------
+
+df_2.write.format('delta').saveAsTable(sales_reps_table)
+
+# COMMAND ----------
+
+display(df_2)
 
 # COMMAND ----------
 
@@ -202,6 +254,36 @@ reality_check_03_c()
 
 # COMMAND ----------
 
+df_3 = spark.read.table(batch_temp_view)
+
+# COMMAND ----------
+
+df_3 = df_3.withColumn("shipping_address_zip", col("shipping_address_zip").cast("int"))
+df_3 = df_3.withColumn("submitted_at", col("submitted_at").cast("int"))
+df_3 = df_3.withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
+
+# COMMAND ----------
+
+df_3 = df_3.drop('sales_rep_ssn', 'sales_rep_first_name', 'sales_rep_last_name', 'sales_rep_address', 'sales_rep_city', 'sales_rep_state', 'sales_rep_zip', 'product_id', 'product_quantity', 'product_sold_price')
+
+# COMMAND ----------
+
+df_3 = df_3.dropDuplicates(['order_id'])
+
+# COMMAND ----------
+
+df_3 = df_3.withColumn("submitted_yyyy_mm", to_date(col("submitted_at"), "yyyy-MM"))
+
+# COMMAND ----------
+
+df_3.write.format("delta").partitionBy("submitted_yyyy_mm").saveAsTable(orders_table)
+
+# COMMAND ----------
+
+display(df_3)
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #3.D
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
@@ -245,6 +327,27 @@ reality_check_03_d()
 # MAGIC   * **`product_sold_price`**:**`decimal(10,2)`**
 # MAGIC   * **`ingest_file_name`**:**`string`**
 # MAGIC   * **`ingested_at`**:**`timestamp`**
+
+# COMMAND ----------
+
+df_4 = spark.read.table(batch_temp_view)
+
+# COMMAND ----------
+
+df_4 = df_4.select([c for c in spark.table('batched_orders').columns if c in {'order_id', 'product_id', 'product_quantity', 'product_sold_price', 'ingest_file_name', 'ingested_at'}])
+
+# COMMAND ----------
+
+df_4 = df_4.withColumn('product_quantity', col('product_quantity').cast('int'))
+df_4 = df_4.withColumn('product_sold_price', col('product_sold_price').cast('decimal(10, 2)'))
+
+# COMMAND ----------
+
+display(df_4)
+
+# COMMAND ----------
+
+df_4.write.format("delta").saveAsTable(line_items_table)
 
 # COMMAND ----------
 
