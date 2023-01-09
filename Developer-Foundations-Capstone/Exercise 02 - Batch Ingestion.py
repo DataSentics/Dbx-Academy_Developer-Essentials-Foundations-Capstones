@@ -154,8 +154,43 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+# Reading the text file into a DataFrame
+data_frame17 = spark.read.text(batch_2017_path)
+display(data_frame17)
+
+# COMMAND ----------
+
+# Extracting from column "value" the separated columns as per fixed width definitions and removing th column "value"
+from pyspark.sql.functions import col, substring, trim
+
+for name, index_values in fixed_width_column_defs.items():
+    data_frame17=data_frame17.withColumn(name, trim(substring(col("value"),index_values[0], index_values[1])))
+data_frame17 = data_frame17.drop("value")
+display(data_frame17)
+
+# COMMAND ----------
+
+# Replacing the empty fields with "null"
+from pyspark.sql.functions import when
+for i in data_frame17.columns:
+    data_frame17 = data_frame17.withColumn(i, when(col(i)=="",None).otherwise(col(i)))
+display(data_frame17)
+
+# COMMAND ----------
+
+# Added columns "ingest_file_name" and "ingested_at" showing the origin file and the date added to the dataframe
+from pyspark.sql.functions import *
+data_frame17 = data_frame17.withColumn("ingest_file_name", input_file_name()).withColumn("ingested_at", current_timestamp())
+display(data_frame17)
+
+# COMMAND ----------
+
+data_frame17.write.format('delta').saveAsTable("batch_target_path")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from batch_target_path
 
 # COMMAND ----------
 
@@ -188,8 +223,26 @@ reality_check_02_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+# Reading the csv file into a DataFrame
+from pyspark.sql.functions import *
+data_frame18= spark.read.option("header", True).option("sep", "\t").csv(batch_2018_path)
+display(data_frame18)
+
+# COMMAND ----------
+
+data_frame18 = data_frame18.withColumn("ingest_file_name", input_file_name()).withColumn("ingested_at", current_timestamp())
+display(data_frame18)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import when
+for i in data_frame18.columns:
+    data_frame18 = data_frame18.withColumn(i, when(col(i)=="null",None).otherwise(col(i)))
+display(data_frame18)
+
+# COMMAND ----------
+
+data_frame18.write.format('delta').mode('append').saveAsTable("batch_target_path")
 
 # COMMAND ----------
 
@@ -227,8 +280,31 @@ reality_check_02_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+# Reading the csv file into a data frame
+
+ddl_schema = "`submitted_at` STRING, `order_id` STRING,`customer_id` STRING,`sales_rep_id` STRING , `sales_rep_ssn` STRING , `sales_rep_first_name` STRING , `sales_rep_last_name` STRING , `sales_rep_address` STRING , `sales_rep_city` string , `sales_rep_state` string , `sales_rep_zip` string , `shipping_address_attention` string , `shipping_address_address` string , `shipping_address_city` string , `shipping_address_state` string , `shipping_address_zip`  string , `product_id` string , `product_quantity` string , `product_sold_price` string"
+data_frame19 = spark.read.options(header=  True).schema(ddl_schema).csv(batch_2019_path)
+display(data_frame19)
+
+# COMMAND ----------
+
+data_frame19 = data_frame19.withColumn("ingest_file_name", input_file_name()).withColumn("ingested_at", current_timestamp())
+display(data_frame19)
+
+# COMMAND ----------
+
+for i in data_frame19.columns:
+    data_frame19 = data_frame19.withColumn(i, when(col(i)=="null",None).otherwise(col(i)))
+display(data_frame19)
+
+# COMMAND ----------
+
+data_frame18.write.format('delta').mode('append').saveAsTable("batch_target_path")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC describe extended batch_target_path
 
 # COMMAND ----------
 
