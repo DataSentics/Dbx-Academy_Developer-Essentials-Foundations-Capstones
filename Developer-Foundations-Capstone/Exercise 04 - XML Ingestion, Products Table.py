@@ -52,8 +52,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db};")
+spark.sql(f"USE {user_db};")
 
 # COMMAND ----------
 
@@ -119,8 +119,20 @@ reality_check_04_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+db_xml=spark.read.format("xml").option("rootTag","products").option("rowTag","product").option("inferSchema", True).load(products_xml_path)
+
+# COMMAND ----------
+
+display(db_xml)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col
+db_xml =db_xml.select(col("_product_id").alias("product_id"),"color", "model_name", "model_number", col("price._base_price").cast("double").alias("base_price"),col("price._color_adj").cast("double").alias("color_adj"),col("price._size_adj").cast("double").alias("size_adj"),col("price.usd").cast("double").alias("price"),"size").where("price is not null")
+
+# COMMAND ----------
+
+db_xml.write.format('delta').saveAsTable(products_table)
 
 # COMMAND ----------
 

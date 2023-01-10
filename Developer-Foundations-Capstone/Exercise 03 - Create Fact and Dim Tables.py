@@ -62,8 +62,8 @@
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df = spark.sql(f"create database if not exists {user_db};")
+spark.sql(f"use {user_db};")
 
 # COMMAND ----------
 
@@ -73,6 +73,11 @@
 # COMMAND ----------
 
 reality_check_03_a()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC show tables
 
 # COMMAND ----------
 
@@ -94,7 +99,19 @@ reality_check_03_a()
 # COMMAND ----------
 
 # TODO
-# Use this cell to complete your solution
+data_frame = spark.read.format("delta").load("dbfs:/dbacademy/lucian-florin.bidica@datasentics.com/developer-foundations-capstone/batch_orders_dirty.delta")
+display(data_frame)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+check_data_frame = data_frame.filter(col('ingested_at').isNull())
+display(check_data_frame)
+
+# COMMAND ----------
+
+data_frame.createOrReplaceTempView(batch_temp_view)
+data_frame.cache()
 
 # COMMAND ----------
 
@@ -152,8 +169,35 @@ reality_check_03_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import col, instr
+
+#Load the table batched_orders (identified by the variable batch_temp_view)
+batched_orders=spark.read.table(batch_temp_view)
+
+#The SSN numbers have errors in them that we want to track - add the boolean column _error_ssn_format - for any case where sales_rep_ssn has a hypen in it, set this value to true otherwise false
+batched_orders=batched_orders.withColumn("_error_ssn_format", instr(col("sales_rep_ssn"),'-')>0)
+
+display(batched_orders)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import regexp_replace
+
+batched_orders=batched_orders.withColumn("sales_rep_ssn", regexp_replace(col("sales_rep_ssn"),'-',"").cast("long"))
+batched_orders=batched_orders.withColumn("sales_rep_zip", col("sales_rep_zip").cast("int"))
+
+batched_orders=batched_orders.drop("submitted_at","order_id","customer_id","shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip","product_id", "product_quantity", "product_sold_price")
+
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders = batched_orders.dropDuplicates(['sales_rep_id', 'sales_rep_ssn'])
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders.write.format("delta").saveAsTable(sales_reps_table)
 
 # COMMAND ----------
 
@@ -208,8 +252,43 @@ reality_check_03_c()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+batched_orders=spark.read.table(batch_temp_view)
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders=batched_orders.withColumn("submitted_at", to_timestamp(from_unixtime(col("submitted_at"))))
+batched_orders=batched_orders.withColumn("shipping_address_zip", col("shipping_address_zip").cast("int"))
+
+# COMMAND ----------
+
+batched_orders = batched_orders.drop('sales_rep_ssn', 'sales_rep_first_name', 'sales_rep_last_name', 'sales_rep_address', 'sales_rep_city', 'sales_rep_state', 'sales_rep_zip', 'product_id', 'product_quantity', 'product_sold_price')
+batched_orders = batched_orders.drop('submitted_atttt')
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders = batched_orders.dropDuplicates(["submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip"])
+
+# COMMAND ----------
+
+batched_orders= batched_orders.withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
+
+# COMMAND ----------
+
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders.printSchema()
+
+# COMMAND ----------
+
+batched_orders = batched_orders.select("submitted_at", "submitted_yyyy_mm", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip", "ingest_file_name", "ingested_at")
+
+# COMMAND ----------
+
+batched_orders.write.partitionBy("submitted_yyyy_mm").format("delta").mode("overwrite").saveAsTable(orders_table)
 
 # COMMAND ----------
 
@@ -254,8 +333,25 @@ reality_check_03_d()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+batched_orders=spark.read.table(batch_temp_view)
+display(batched_orders)
+
+# COMMAND ----------
+
+batched_orders = batched_orders.select('order_id', 'product_id', 'product_quantity' , 'product_sold_price', 'ingest_file_name' , 'ingested_at')
+
+# COMMAND ----------
+
+display(batched_orders)
+
+# COMMAND ----------
+
+from pyspark.sql.types import DecimalType
+batched_orders = batched_orders.withColumn("product_quantity", col("product_quantity").cast("integer")).withColumn("product_sold_price", col("product_sold_price").cast(DecimalType(10,2)))
+
+# COMMAND ----------
+
+batched_orders.write.format("delta").saveAsTable(line_items_table)
 
 # COMMAND ----------
 
