@@ -84,6 +84,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f'USE {user_db}')
 
 # COMMAND ----------
 
@@ -120,6 +121,66 @@ reality_check_05_a()
 # MAGIC   * Records must be appended to the table identified by the variable **`orders_table`**
 # MAGIC   * The query must be named the same as the table, identified by the variable **`orders_table`**
 # MAGIC   * The query must use the checkpoint location identified by the variable **`orders_checkpoint_path`**
+
+# COMMAND ----------
+
+import pyspark.sql.types as t
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
+schema = t.StructType([ 
+  t.StructField("submitted_at", t.StringType(), True),
+  t.StructField("order_id", t.StringType(), True),
+  t.StructField("customer_id", t.StringType(), True),
+  t.StructField("sales_rep_id", t.StringType(), True),
+  t.StructField("shipping_address_attention", t.StringType(), True),
+  t.StructField("shipping_address_address", t.StringType(), True),
+  t.StructField("shipping_address_city", t.StringType(), True)
+              ])
+
+# COMMAND ----------
+
+df = spark.readStream.option('maxFilesPerTrigger', 1).format('JSON').schema(schema).load(stream_path)
+
+# COMMAND ----------
+
+df = (df
+      .withColumn('submitted_at', col('submitted_at').cast('timestamp'))
+      .withColumn('submitted_yyyy_mm', date_format(col('submitted_at'), 'yyyy-MM'))
+      .withColumn('ingested_at', current_timestamp())
+      .withColumn('ingest_file_name', lit(stream_path))
+     )
+
+# COMMAND ----------
+
+df = df.withColumn("submitted_yyyy_mm", to_date("submitted_yyyy_mm", "yyyy-MM"))
+
+# COMMAND ----------
+
+df = df.withColumn()
+
+# COMMAND ----------
+
+df.printSchema
+
+# COMMAND ----------
+
+display(df)
+
+# COMMAND ----------
+
+df_2 = (df
+       .writeStream
+       .format('delta')
+       .partitionBy('submitted_yyyy_mm')
+       .outputMode('append')
+       .queryName(orders_table)
+       .option('checkpointLocation', orders_checkpoint_path)
+       .table(orders_table))
 
 # COMMAND ----------
 
@@ -181,6 +242,44 @@ reality_check_05_b()
 
 # COMMAND ----------
 
+line_items_schema = t.StructType([ 
+  t.StructField("order_id", t.StringType(), True),
+  t.StructField("product_id", t.StringType(), True),
+  t.StructField("product_quantity", t.IntegerType(), True),
+  t.StructField("product_sold_price", t.DecimalType(), True)
+              ])
+
+# COMMAND ----------
+
+df_b = spark.readStream.option('maxFilesPerTrigger', 1).format('JSON').schema(line_items_schema).load(stream_path)
+
+# COMMAND ----------
+
+df_b = (df_b
+      .withColumn('ingested_at', current_timestamp())
+      .withColumn('ingest_file_name', lit(stream_path))
+     )
+
+# COMMAND ----------
+
+df_b = df_b.withColumn('product_sold_price', col('product_sold_price').cast('decimal(10, 2)'))
+
+# COMMAND ----------
+
+display(df_b)
+
+# COMMAND ----------
+
+df_b2 = (df_b
+       .writeStream
+       .format('delta')
+       .outputMode('append')
+       .queryName(line_items_table)
+       .option('checkpointLocation', line_items_checkpoint_path)
+       .table(line_items_table))
+
+# COMMAND ----------
+
 # MAGIC %md ### Implement Exercise #5.C
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
@@ -193,6 +292,11 @@ reality_check_05_b()
 # COMMAND ----------
 
 reality_check_05_c()
+
+# COMMAND ----------
+
+for s in spark.streams.active:
+    s.stop()
 
 # COMMAND ----------
 
