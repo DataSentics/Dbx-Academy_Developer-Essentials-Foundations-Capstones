@@ -20,6 +20,11 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT * FROM products
+
+# COMMAND ----------
+
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Setup Exercise #6</h2>
 # MAGIC 
 # MAGIC To get started, run the following cell to setup this exercise, declaring exercise-specific variables and functions.
@@ -49,6 +54,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f'USE {user_db}')
 
 # COMMAND ----------
 
@@ -78,8 +84,17 @@ reality_check_06_a()
 
 # COMMAND ----------
 
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+shipping_count = spark.table('orders').groupBy('shipping_address_state').count().sort(col('count').desc()).createOrReplaceTempView(question_1_results_table)
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {question_1_results_table}'))
 
 # COMMAND ----------
 
@@ -89,6 +104,22 @@ reality_check_06_a()
 # COMMAND ----------
 
 reality_check_06_b()
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {orders_table}'))
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {line_items_table}'))
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {products_table}'))
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {sales_reps_table}'))
 
 # COMMAND ----------
 
@@ -112,6 +143,46 @@ reality_check_06_b()
 # MAGIC  * **`ex_avg`** - the local variable holding the average value
 # MAGIC  * **`ex_min`** - the local variable holding the minimum value
 # MAGIC  * **`ex_max`** - the local variable holding the maximum value
+
+# COMMAND ----------
+
+df_6c = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .select('product_sold_price'))
+
+# COMMAND ----------
+
+df_6c = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .select('product_sold_price')
+        .filter("color = 'green'")
+        .filter("shipping_address_state = 'NC'") 
+#         .filter('_error_ssn_format')
+        .agg(avg('product_sold_price'), min('product_sold_price'), max('product_sold_price'))
+        )
+
+# COMMAND ----------
+
+display(df_6c)
+
+# COMMAND ----------
+
+df_6c_test1 = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .select('product_sold_price')
+        .filter("color = 'green'")
+        .filter("shipping_address_state = 'NC'") 
+        .filter('_error_ssn_format'))
+
+# COMMAND ----------
+
+display(df_6c_test1)
 
 # COMMAND ----------
 
@@ -167,6 +238,52 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 # MAGIC %md ### Implement Exercise #6.D
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+df_6d_test = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .withColumn('profit', (col('product_sold_price') - col('price') * col('product_quantity')))
+             )
+
+# COMMAND ----------
+
+display(df_6d_test)
+
+# COMMAND ----------
+
+df_6d = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .withColumn('profit', ((col('product_sold_price') - col('price')) * col('product_quantity')))
+        .groupBy('sales_rep_first_name', 'sales_rep_last_name').agg(sum(col('profit')))
+        .orderBy(col('sum(profit)').desc())
+        .limit(1)
+        )
+
+# COMMAND ----------
+
+df_6d_view = (spark.table(orders_table)
+        .join(spark.table(line_items_table), 'order_id')
+        .join(spark.table(products_table), 'product_id')
+        .join(spark.table(sales_reps_table), 'sales_rep_id')
+        .withColumn('profit', ((col('product_sold_price') - col('price')) * col('product_quantity')))
+        .groupBy('sales_rep_first_name', 'sales_rep_last_name').agg(sum(col('profit')))
+        .orderBy(col('sum(profit)').desc())
+        .limit(1)
+        .createOrReplaceTempView(question_3_results_table)
+        )
+
+# COMMAND ----------
+
+display(df_6d)
 
 # COMMAND ----------
 
