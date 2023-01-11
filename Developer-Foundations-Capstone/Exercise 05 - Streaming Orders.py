@@ -161,10 +161,6 @@ df = df.withColumn("submitted_yyyy_mm", to_date("submitted_yyyy_mm", "yyyy-MM"))
 
 # COMMAND ----------
 
-df = df.withColumn()
-
-# COMMAND ----------
-
 df.printSchema
 
 # COMMAND ----------
@@ -181,6 +177,10 @@ df_2 = (df
        .queryName(orders_table)
        .option('checkpointLocation', orders_checkpoint_path)
        .table(orders_table))
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT count(*) FROM {orders_table}'))
 
 # COMMAND ----------
 

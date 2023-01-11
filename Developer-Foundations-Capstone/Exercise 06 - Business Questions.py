@@ -161,8 +161,9 @@ df_6c = (spark.table(orders_table)
         .select('product_sold_price')
         .filter("color = 'green'")
         .filter("shipping_address_state = 'NC'") 
-#         .filter('_error_ssn_format')
+        .filter('_error_ssn_format')
         .agg(avg('product_sold_price'), min('product_sold_price'), max('product_sold_price'))
+        .createOrReplaceTempView(question_2_results_table)
         )
 
 # COMMAND ----------
@@ -195,9 +196,9 @@ display(df_6c_test1)
 # TODO
 # Use this cell to complete your solution
 
-ex_avg = 0 # FILL_IN
-ex_min = 0 # FILL_IN
-ex_max = 0 # FILL_IN
+ex_avg = 96.730763 # FILL_IN
+ex_min = 85.79 # FILL_IN
+ex_max = 113.43 # FILL_IN
 
 # COMMAND ----------
 

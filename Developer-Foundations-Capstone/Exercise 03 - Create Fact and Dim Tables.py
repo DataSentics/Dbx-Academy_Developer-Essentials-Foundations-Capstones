@@ -109,11 +109,19 @@ df = spark.read.format('delta').load(batch_source_path)
 
 # COMMAND ----------
 
+df.count()
+
+# COMMAND ----------
+
 df.createOrReplaceTempView(batch_temp_view)
 
 # COMMAND ----------
 
 df.cache()
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {batch_temp_view}'))
 
 # COMMAND ----------
 
@@ -167,6 +175,7 @@ reality_check_03_b()
 # COMMAND ----------
 
 from pyspark.sql.functions import *
+from pyspark.sql import types as t
 
 # COMMAND ----------
 
@@ -176,7 +185,7 @@ df_2 = spark.read.table(batch_temp_view)
 
 # COMMAND ----------
 
-
+display(spark.sql(f"select * from {batch_temp_view}"))
 
 # COMMAND ----------
 
@@ -184,12 +193,16 @@ df_2 = df_2.withColumn('_error_ssn_format', when(col("sales_rep_ssn").like("%-%"
 
 # COMMAND ----------
 
+df = df.withColumn("sales_rep_ssn", (regexp_replace(col("sales_rep_ssn"), "-", "")).cast(t.LongType()))
+
+# COMMAND ----------
+
 from pyspark.sql.types import *
 
 # COMMAND ----------
 
-df_2 = df_2.withColumn("sales_rep_ssn", df_2["sales_rep_ssn"].cast(LongType()))
-df_2 = df_2.withColumn("sales_rep_zip", df_2["sales_rep_zip"].cast(IntegerType()))
+df_2 = df_2.withColumn("sales_rep_ssn", df_2["sales_rep_ssn"].cast(t.LongType()))
+df_2 = df_2.withColumn("sales_rep_zip", df_2["sales_rep_zip"].cast(t.IntegerType()))
 
 # COMMAND ----------
 
@@ -201,7 +214,7 @@ df_2 = df_2.dropDuplicates(['sales_rep_id', 'sales_rep_ssn'])
 
 # COMMAND ----------
 
-df_2.write.format('delta').saveAsTable(sales_reps_table)
+df_2.write.format('delta').mode("overwrite").saveAsTable(sales_reps_table)
 
 # COMMAND ----------
 
@@ -268,7 +281,7 @@ df_3 = df_3.drop('sales_rep_ssn', 'sales_rep_first_name', 'sales_rep_last_name',
 
 # COMMAND ----------
 
-df_3 = df_3.dropDuplicates(['order_id'])
+df_3 = df_3.dropDuplicates(["submitted_at", "order_id", "customer_id", "sales_rep_id", "shipping_address_attention", "shipping_address_address", "shipping_address_city", "shipping_address_state", "shipping_address_zip"])
 
 # COMMAND ----------
 
@@ -276,11 +289,15 @@ df_3 = df_3.withColumn("submitted_yyyy_mm", to_date(col("submitted_at"), "yyyy-M
 
 # COMMAND ----------
 
-df_3.write.format("delta").partitionBy("submitted_yyyy_mm").saveAsTable(orders_table)
+df_3.write.format("delta").partitionBy("submitted_yyyy_mm").mode('overwrite').saveAsTable(orders_table)
 
 # COMMAND ----------
 
-display(df_3)
+df_3.printSchema()
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT * FROM {orders_table}'))
 
 # COMMAND ----------
 
@@ -343,11 +360,19 @@ df_4 = df_4.withColumn('product_sold_price', col('product_sold_price').cast('dec
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 display(df_4)
 
 # COMMAND ----------
 
-df_4.write.format("delta").saveAsTable(line_items_table)
+df_4.write.format("delta").mode('overwrite').saveAsTable(line_items_table)
+
+# COMMAND ----------
+
+display(spark.sql(f'SELECT count(*) FROM {line_items_table}'))
 
 # COMMAND ----------
 
