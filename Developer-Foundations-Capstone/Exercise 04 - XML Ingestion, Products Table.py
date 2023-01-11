@@ -54,15 +54,12 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #4.A
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_04_a()
 
 # COMMAND ----------
 
@@ -77,10 +74,6 @@ reality_check_04_a()
 # MAGIC 
 # MAGIC Once the library is installed, run the following reality check to confirm proper installation.<br/>
 # MAGIC Note: You may need to restart the cluster after installing the library for you changes to take effect.
-
-# COMMAND ----------
-
-reality_check_04_b()
 
 # COMMAND ----------
 
@@ -121,6 +114,36 @@ reality_check_04_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import col
+df_products = (spark
+               .read
+               .format('xml')
+               .option('rootTag', 'products')
+               .option('rowTag', 'product')
+               .option('inferSchema', True)
+               .load(products_xml_path)
+               .filter(col('price').isNotNull())
+               .select(col('_product_id').alias('product_id'), 
+                         'color', 
+                         'model_name', 
+                         'model_number', 
+                         col('price._base_price').cast('double').alias('base_price'), 
+                         col('price._color_adj').cast('double').alias('color_adj'), 
+                         col('price._size_adj').cast('double').alias('size_adj'), 
+                         col('price.usd').cast('double').alias('price'), 'size')
+              )
+
+# COMMAND ----------
+
+df_products.printSchema()
+
+# COMMAND ----------
+
+df_products.write.format("delta").mode("overwrite").saveAsTable(f"{products_table}")
+
+# COMMAND ----------
+
+display(df_products)
 
 # COMMAND ----------
 
@@ -129,17 +152,9 @@ reality_check_04_b()
 
 # COMMAND ----------
 
-reality_check_04_c()
-
-# COMMAND ----------
-
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #4 - Final Check</h2>
 # MAGIC 
 # MAGIC Run the following command to make sure this exercise is complete:
-
-# COMMAND ----------
-
-reality_check_04_final()
 
 # COMMAND ----------
 

@@ -154,6 +154,10 @@ fixed_width_column_defs = {
 
 # COMMAND ----------
 
+dbutils.fs.head(batch_2017_path)
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
 # dbutils.fs.ls(batch_2017_path)
@@ -204,7 +208,11 @@ display(df_2017_silver)
 
 # COMMAND ----------
 
-df_2017_silver.write.format("delta").mode("overwrite").save(batch_target_path)
+display(df_2017_silver.filter(length(col('shipping_address_state')) > 2 ))
+
+# COMMAND ----------
+
+df_2017_silver.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
@@ -215,10 +223,6 @@ df_2017_silver.write.format("delta").mode("overwrite").save(batch_target_path)
 
 # MAGIC %md ### Reality Check #2.A
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_02_a()
 
 # COMMAND ----------
 
@@ -239,6 +243,10 @@ reality_check_02_a()
 # MAGIC %md ### Implement Exercise #2.b
 # MAGIC 
 # MAGIC Implement your solution in the following cell:
+
+# COMMAND ----------
+
+dbutils.fs.head(batch_2018_path)
 
 # COMMAND ----------
 
@@ -264,6 +272,10 @@ display(df_2018_silver)
 
 # COMMAND ----------
 
+display(df_2018_silver.filter(length(col('shipping_address_state')) > 2 ))
+
+# COMMAND ----------
+
 df_2018_silver.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
@@ -274,12 +286,12 @@ df_2018_silver.write.format("delta").mode("append").save(batch_target_path)
 
 # COMMAND ----------
 
-# MAGIC %md ### Reality Check #2.B
-# MAGIC Run the following command to ensure that you are on track:
+
 
 # COMMAND ----------
 
-reality_check_02_b()
+# MAGIC %md ### Reality Check #2.B
+# MAGIC Run the following command to ensure that you are on track:
 
 # COMMAND ----------
 
@@ -308,8 +320,69 @@ reality_check_02_b()
 
 # COMMAND ----------
 
+dbutils.fs.head(batch_2019_path)
+
+# COMMAND ----------
+
+from pyspark.sql.types import StructType, StructField
+
+schema = StructType([
+    StructField("submitted_at", StringType(), True),
+    StructField("order_id", StringType(), True),
+    StructField("customer_id", StringType(), True),
+    StructField("sales_rep_id", StringType(), True),
+    StructField("sales_rep_ssn", StringType(), True),
+    StructField("sales_rep_first_name", StringType(), True),
+    StructField("sales_rep_last_name", StringType(), True),
+    StructField("sales_rep_address", StringType(), True),
+    StructField("sales_rep_city", StringType(), True),
+    StructField("sales_rep_state", StringType(), True),
+    StructField("sales_rep_zip", StringType(), True),
+    StructField("shipping_address_attention", StringType(), True),
+    StructField("shipping_address_address", StringType(), True),
+    StructField("shipping_address_city", StringType(), True),
+    StructField("shipping_address_state", StringType(), True),
+    StructField("shipping_address_zip", StringType(), True),
+    StructField("product_id", StringType(), True),
+    StructField("product_quantity", StringType(), True),
+    StructField("product_sold_price", StringType(), True)    
+])
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+df_2019_bronze = (spark
+                  .read
+                  .option("sep", ",")
+                  .option("header", True)
+                  .schema(schema)
+                  .csv(batch_2019_path) 
+                 )
+
+# COMMAND ----------
+
+df_2019_silver = (df_2019_bronze
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp())
+                  .select([when(col(c)=="null",None).otherwise(col(c)).alias(c) for c in df_2019_bronze.columns])
+                 )
+
+# COMMAND ----------
+
+display(df_2019_silver)
+
+# COMMAND ----------
+
+display(df_2019_silver.filter(length(col('shipping_address_state')) > 2 ))
+
+# COMMAND ----------
+
+df_2019_silver.write.format("delta").mode("append").save(batch_target_path)
+
+# COMMAND ----------
+
+# display(dbutils.fs.ls(batch_target_path))
 
 # COMMAND ----------
 
@@ -318,17 +391,9 @@ reality_check_02_b()
 
 # COMMAND ----------
 
-reality_check_02_c()
-
-# COMMAND ----------
-
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #2 - Final Check</h2>
 # MAGIC 
 # MAGIC Run the following command to make sure this exercise is complete:
-
-# COMMAND ----------
-
-reality_check_02_final()
 
 # COMMAND ----------
 

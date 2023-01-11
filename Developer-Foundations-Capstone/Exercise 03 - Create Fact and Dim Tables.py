@@ -62,17 +62,23 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC -- drop database dbacademy_filip_mircea_megiesan_datasentics_com_developer_foundations_capstone cascade
+
+# COMMAND ----------
+
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {user_db}")
+
+# COMMAND ----------
+
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #3.A
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_03_a()
 
 # COMMAND ----------
 
@@ -95,15 +101,17 @@ reality_check_03_a()
 
 # TODO
 # Use this cell to complete your solution
+spark.read.format('delta').load(batch_source_path).createOrReplaceTempView(f'{batch_temp_view}')
+spark.sql(f"cache table {batch_temp_view}")
+
+# COMMAND ----------
+
+display(spark.sql(f'select * from {batch_temp_view} where length(shipping_address_state) > 2'))
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #3.B
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_03_b()
 
 # COMMAND ----------
 
@@ -154,15 +162,54 @@ reality_check_03_b()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import col
+from pyspark.sql.types import *
+
+df_sales_reps = (spark
+        .table(f'{batch_temp_view}')
+        .withColumn('sales_rep_ssn', col('sales_rep_ssn').cast(LongType()))
+        .withColumn('sales_rep_zip', col('sales_rep_zip').cast(IntegerType()))
+
+        .select([c for c in spark.table(f'{batch_temp_view}').columns if c not in {'submitted_at', 
+                                                                                       'order_id', 
+                                                                                       'customer_id', 
+                                                                                       'shipping_address_attention', 
+                                                                                       'shipping_address_address', 
+                                                                                       'shipping_address_city', 
+                                                                                       'shipping_address_state', 
+                                                                                       'shipping_address_zip', 
+                                                                                       'product_id', 'product_quantity', 
+                                                                                       'product_sold_price'}])
+         .withColumn('_error_ssn_format', col('sales_rep_ssn').contains('-'))
+                   )
+
+# COMMAND ----------
+
+df_sales_reps = (df_sales_reps.dropDuplicates([c for c in df_sales_reps.columns if c not in {'ingest_file_name',
+                                                                                             'ingested_at'}])
+                 
+                )               
+
+df_sales_reps = df_sales_reps.dropDuplicates(['sales_rep_id'])
+
+# COMMAND ----------
+
+display(df_sales_reps)
+
+# COMMAND ----------
+
+df_sales_reps = (df_sales_reps
+                    .write
+                    .format('delta')
+                    .mode('overwrite')
+                    .saveAsTable(f'{sales_reps_table}')
+                    
+                   )
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #3.C
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_03_c()
 
 # COMMAND ----------
 
@@ -210,15 +257,42 @@ reality_check_03_c()
 
 # TODO
 # Use this cell to complete your solution
+from pyspark.sql.functions import *
+df_orders =  (spark
+             .table(f'{batch_temp_view}')
+             .withColumn("submitted_at", from_unixtime(col("submitted_at")).cast("timestamp"))
+             .withColumn("shipping_address_zip", col("shipping_address_zip").cast("integer"))
+             .drop("sales_rep_ssn", 
+                   "sales_rep_first_name", 
+                   "sales_rep_last_name", 
+                   "sales_rep_address", 
+                   "sales_rep_city", 
+                   "sales_rep_state", 
+                   "sales_rep_zip", 
+                   "product_id", 
+                   "product_quantity", 
+                   "product_sold_price")
+
+            )
+
+df_orders = (df_orders.dropDuplicates([c for c in df_orders.columns if c not in {'ingest_file_name',
+                                                                                 'ingested_at'}])
+            .withColumn("submitted_yyyy_mm", date_format("submitted_at", "yyyy-MM"))
+            )
+            
+
+# COMMAND ----------
+
+display(df_orders)
+
+# COMMAND ----------
+
+df_orders.write.partitionBy("submitted_yyyy_mm").format("delta").mode("overwrite").saveAsTable(f"{orders_table}")
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #3.D
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_03_d()
 
 # COMMAND ----------
 
@@ -256,6 +330,17 @@ reality_check_03_d()
 
 # TODO
 # Use this cell to complete your solution
+df_line_items =  (spark
+                 .table(f'{batch_temp_view}')
+                 .select("order_id", "product_id", "product_quantity", "product_sold_price", "ingest_file_name", "ingested_at")
+                 .withColumn("product_quantity", col("product_quantity").cast("integer"))
+                 .withColumn("product_sold_price", col("product_sold_price").cast(DecimalType(10,2)))
+
+                )
+
+# COMMAND ----------
+
+df_line_items.write.format("delta").mode("overwrite").saveAsTable(f"{line_items_table}")
 
 # COMMAND ----------
 
@@ -264,17 +349,9 @@ reality_check_03_d()
 
 # COMMAND ----------
 
-reality_check_03_e()
-
-# COMMAND ----------
-
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #3 - Final Check</h2>
 # MAGIC 
 # MAGIC Run the following command to make sure this exercise is complete:
-
-# COMMAND ----------
-
-reality_check_03_final()
 
 # COMMAND ----------
 

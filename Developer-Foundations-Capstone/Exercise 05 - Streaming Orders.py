@@ -84,15 +84,12 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
 # MAGIC %md ### Reality Check #5.A
 # MAGIC Run the following command to ensure that you are on track:
-
-# COMMAND ----------
-
-reality_check_05_a()
 
 # COMMAND ----------
 
@@ -129,8 +126,81 @@ reality_check_05_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+df_orders = (spark
+            .read
+            .format('json')
+            .load(stream_path)
+
+            )
+
+schema = df_orders.schema
+
+# COMMAND ----------
+
+s_df_orders = (spark
+              .readStream
+              .format('json')
+              .option("maxFilesPerTrigger", 1)
+              .schema(schema)
+              .load(stream_path)
+
+              )
+
+# COMMAND ----------
+
+display(s_df_orders)
+s_df_orders.printSchema()
+
+# COMMAND ----------
+
+s_df_orders = (s_df_orders
+              .withColumn("ingest_file_name", input_file_name())
+              .withColumn("ingested_at", current_timestamp())  
+              .withColumn("submittedAt", col("submittedAt").cast("timestamp"))
+              .withColumn("submitted_yyyy_mm", date_format("submittedAt", "yyyy-MM"))
+       
+              )
+
+# COMMAND ----------
+
+# display(s_df_orders)
+s_df_orders.printSchema()
+
+# COMMAND ----------
+
+s_df_orders = (s_df_orders
+              .select(
+              col('submittedAt').alias('submitted_at'),
+              col('orderId').alias('order_id'),
+              col('customerId').alias('customer_id'),
+              col('salesRepId').alias('sales_rep_id'),
+              s_df_orders.shippingAddress.attention.alias('shipping_address_attention'),
+              s_df_orders.shippingAddress.address.alias('shipping_address_address'),
+              s_df_orders.shippingAddress.city.alias('shipping_address_city'),
+              s_df_orders.shippingAddress.state.alias('shipping_address_state'),
+              s_df_orders.shippingAddress.zip.alias('shipping_address_zip').cast('integer'),
+              col('ingest_file_name'),
+              col('ingested_at'),
+              col('submitted_yyyy_mm')
+                             
+              )
+              )
+
+# COMMAND ----------
+
+s_query_orders = (s_df_orders
+                 .writeStream
+                 .format("delta")
+                 .partitionBy("submitted_yyyy_mm")
+                 .outputMode("append")
+                 .queryName(f"{orders_table}")
+                 .trigger(processingTime="1 second")
+                 .option("checkpointLocation", f"{orders_checkpoint_path}")
+                 .toTable(f"{orders_table}")
+                 )
 
 # COMMAND ----------
 
@@ -140,10 +210,6 @@ reality_check_05_a()
 # MAGIC **Caution**: In the cell above, you will be appending to a Delta table and the final record count will be validated below. Should you restart the stream, you will inevitably append duplicate records to these tables forcing the validation to fail. There are two things you will need to address in this scenario:
 # MAGIC * Address the duplicate data issue by re-running **Exercise #3** which would presumably delete and/or overwrite the datasets, putting them back to their default state for this exercise.
 # MAGIC * Address the stream's state issue (remembering which files were processed) by deleting the directory identified by *`orders_checkpoint_path`*
-
-# COMMAND ----------
-
-reality_check_05_b()
 
 # COMMAND ----------
 
@@ -187,22 +253,79 @@ reality_check_05_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_line_items = (spark
+                .read
+                .format('json')
+                .load(stream_path)
+
+                )
+
+schema2 = df_line_items.schema
+
+s_df_line_items = (spark
+                  .readStream
+                  .format('json')
+                  .option("maxFilesPerTrigger", 1)
+                  .schema(schema2)
+                  .load(stream_path)
+
+                  )
 
 # COMMAND ----------
 
-reality_check_05_c()
+s_df_line_items = (s_df_line_items
+                  .withColumn("ingest_file_name", input_file_name())
+                  .withColumn("ingested_at", current_timestamp())  
+
+                  )
+
+# COMMAND ----------
+
+s_df_line_items.printSchema()
+
+# COMMAND ----------
+
+s_df_line_items = (s_df_line_items.withColumn('product', explode(col('products'))))
+
+# COMMAND ----------
+
+s_df_line_items.printSchema()
+
+# COMMAND ----------
+
+s_df_line_items = (s_df_line_items
+                  .select(
+                  col('orderId').alias('order_id'),
+                  s_df_line_items.product.productId.alias('product_id'),
+                  s_df_line_items.product.quantity.alias('product_quantity').cast('integer'),
+                  s_df_line_items.product.soldPrice.alias('product_sold_price').cast(DecimalType(10,2)),  
+                  col('ingest_file_name'),
+                  col('ingested_at')
+
+                  )
+                  )
+
+# COMMAND ----------
+
+s_df_line_items.printSchema()
+
+# COMMAND ----------
+
+s_query_line_items = (s_df_line_items
+                     .writeStream
+                     .format("delta")
+                     .outputMode("append")
+                     .queryName(f"{line_items_table}")
+                     .trigger(processingTime="1 second")
+                     .option("checkpointLocation", f"{line_items_checkpoint_path}")
+                     .toTable(f"{line_items_table}")
+                     )
 
 # COMMAND ----------
 
 # MAGIC %md <h2><img src="https://files.training.databricks.com/images/105/logo_spark_tiny.png"> Exercise #5 - Final Check</h2>
 # MAGIC 
 # MAGIC Run the following command to make sure this exercise is complete:
-
-# COMMAND ----------
-
-reality_check_05_final()
 
 # COMMAND ----------
 

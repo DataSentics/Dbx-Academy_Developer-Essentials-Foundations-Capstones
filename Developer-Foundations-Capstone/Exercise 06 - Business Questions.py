@@ -49,6 +49,7 @@
 
 # TODO
 # Use this cell to complete your solution
+spark.sql(f"USE {user_db}")
 
 # COMMAND ----------
 
@@ -78,8 +79,23 @@ reality_check_06_a()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+spark.table('orders').printSchema()
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+
+df_q1 = (spark
+         .table('orders')
+         .groupBy("shipping_address_state").count()
+         .sort(col('count').desc())
+         .createOrReplaceTempView(question_1_results_table))
+
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from question_1_results
 
 # COMMAND ----------
 
@@ -121,12 +137,37 @@ reality_check_06_b()
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_joined = (spark.table(f'{orders_table}')
+         .join(spark.table(f'{line_items_table}'), 'order_id', 'inner')
+         .join(spark.table(f'{products_table}'), 'product_id', 'inner')
+         .join(spark.table(f'{sales_reps_table}'), 'sales_rep_id', 'inner')
+)
 
-ex_avg = 0 # FILL_IN
-ex_min = 0 # FILL_IN
-ex_max = 0 # FILL_IN
+# COMMAND ----------
+
+df_q2 = (df_joined
+         .filter(col('color') == 'green')
+         .filter(col('shipping_address_state') == 'NC')
+         .filter(col('_error_ssn_format').isNull())
+         
+)
+
+# COMMAND ----------
+
+df_q2 = (df_q2
+         .select(mean('product_sold_price'), min('product_sold_price'), max('product_sold_price'))
+         .createOrReplaceTempView(f"{question_2_results_table}")
+)
+
+# COMMAND ----------
+
+display(df_q2)
+
+# COMMAND ----------
+
+ex_avg = 97.679224
+ex_min = 85.79
+ex_max = 113.43
 
 # COMMAND ----------
 
@@ -170,8 +211,19 @@ reality_check_06_c(ex_avg, ex_min, ex_max)
 
 # COMMAND ----------
 
-# TODO
-# Use this cell to complete your solution
+df_q3 = (df_joined
+         .withColumn("total_profit", (col("product_sold_price") - col("price")) * col("product_quantity"))
+         .groupBy("sales_rep_first_name", "sales_rep_last_name")
+         .agg(sum("total_profit"))
+         .sort(col("sum(total_profit)").desc())
+         .limit(1)
+         .createOrReplaceTempView(f"{question_3_results_table}")
+         )
+
+
+# COMMAND ----------
+
+display(df_q3)
 
 # COMMAND ----------
 
